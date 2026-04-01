@@ -88,7 +88,7 @@ namespace NES
         void INX();
         void INY();
         void JMP(uint16_t memory);
-        void JSR(uint8_t memory);
+        void JSR(uint16_t memory);
         void LDA(uint8_t memory);
         void LDX(uint8_t memory);
         void LDY(uint8_t memory);

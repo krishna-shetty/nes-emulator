@@ -290,7 +290,7 @@ void CPU::JMP(uint16_t memory)
 }
 
 // Jump to Subroutine
-void CPU::JSR(uint8_t memory)
+void CPU::JSR(uint16_t memory)
 {
     uint16_t returnAddr = _pc + 1;
 
