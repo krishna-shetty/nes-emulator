@@ -45,6 +45,20 @@ namespace NES
         void push(uint8_t value);
         uint8_t pull();
 
+        // Addressing modes
+        uint8_t     addrAccumulator();
+        uint16_t    addrAbsolute();
+        uint16_t    addrAbsoluteX();
+        uint16_t    addrAbsoluteY();
+        uint16_t     addrImmediate();
+        void        addrImplied();
+        uint16_t    addrIndirect();
+        uint16_t    addrIndirectX();
+        uint16_t    addrIndirectY();
+        uint16_t    addrZeroPage();
+        uint16_t    addrZeroPageX();
+        uint16_t    addrZeroPageY();
+
         // Official instructions
         void ADC(uint8_t memory);
         void AND(uint8_t memory);

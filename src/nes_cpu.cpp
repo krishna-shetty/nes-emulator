@@ -8,6 +8,10 @@ CPU::CPU(Region region = Region::NTSC)
     _ram = RAM();
 }
 
+// ============================================================
+// HELPERS
+// ============================================================
+
 void CPU::setFlag(Flags flag, bool value)
 {
     uint8_t n = static_cast<uint8_t>(flag);
@@ -45,6 +49,19 @@ uint8_t CPU::pull()
     _sp++;
     return _ram.read(0x0100 | _sp);
 }
+
+void CPU::branch(int8_t offset, bool condition)
+{
+    if (condition)
+    {
+        incrementCycles();
+        _pc += offset;
+    }
+}
+
+// ============================================================
+// INSTRUCTIONS
+// ============================================================
 
 // Add with Carry
 void CPU::ADC(uint8_t memory)
@@ -84,31 +101,22 @@ uint8_t CPU::ASL(uint8_t value)
     return value;
 }
 
-void CPU::branch(int8_t offset, bool condition)
-{
-    if (condition)
-    {
-        incrementCycles();
-        _pc += offset;
-    }
-}
-
 // Branch if Carry Clear
 void CPU::BCC(int8_t memory)
 {
-    branch(memory, getFlag(Flags::C) == 0);    
+    branch(memory, getFlag(Flags::C) == 0);
 }
 
 // Branch if Carry Set
 void CPU::BCS(int8_t memory)
 {
-   branch(memory, getFlag(Flags::C) == 1);       
+    branch(memory, getFlag(Flags::C) == 1);
 }
 
 // Branch if Equal
 void CPU::BEQ(int8_t memory)
 {
-   branch(memory, getFlag(Flags::Z) == 1);      
+    branch(memory, getFlag(Flags::Z) == 1);
 }
 
 // Bit Test
@@ -139,6 +147,7 @@ void CPU::BPL(int8_t memory)
     branch(memory, getFlag(Flags::N) == 0);
 }
 
+// Break
 void CPU::BRK()
 {
     uint16_t returnAddr = _pc + 1;
@@ -256,7 +265,7 @@ uint8_t CPU::INC(uint8_t memory)
 {
     uint8_t result = memory + 1;
     setFlag(Flags::Z, result == 0);
-    setFlag(Flags::N, getBit(result, 7)); 
+    setFlag(Flags::N, getBit(result, 7));
     return result;
 }
 
@@ -271,7 +280,7 @@ void CPU::INX()
 void CPU::INY()
 {
     uint8_t result = _Y + 1;
-    setY(result); 
+    setY(result);
 }
 
 // Jump
@@ -317,14 +326,15 @@ uint8_t CPU::LSR(uint8_t value)
 
     setFlag(Flags::C, carry == 1);
     setFlag(Flags::Z, value == 0);
-    setFlag(Flags::N, false); 
+    setFlag(Flags::N, false);
 
     return value;
 }
 
 // No Operation
 void CPU::NOP()
-{}
+{
+}
 
 // Bitwise OR
 void CPU::ORA(uint8_t memory)
@@ -387,11 +397,11 @@ uint8_t CPU::ROR(uint8_t value)
     uint8_t carry = getFlag(Flags::C);
     value >>= 1;
     carry == 1 ? setBit(value, 7) : clearBit(value, 7);
-    
+
     setFlag(Flags::C, bit0 == 1);
     setFlag(Flags::Z, value == 0);
     setFlag(Flags::N, getBit(value, 7));
-    
+
     return value;
 }
 
@@ -410,11 +420,11 @@ void CPU::RTI()
 // Return from Subroutine
 void CPU::RTS()
 {
-   uint8_t lo = pull();
-   uint8_t hi = pull();
-   
-   _pc = (static_cast<uint16_t>(hi) << 8) | lo; 
-   _pc++;
+    uint8_t lo = pull();
+    uint8_t hi = pull();
+
+    _pc = (static_cast<uint16_t>(hi) << 8) | lo;
+    _pc++;
 }
 
 // Subtract with Carry
@@ -498,4 +508,111 @@ void CPU::TXS()
 void CPU::TYA()
 {
     setAccumulator(_Y);
+}
+
+// ============================================================
+// ADDRESSING MODES
+// ============================================================
+
+uint8_t CPU::addrAccumulator()
+{
+    return _A;
+}
+
+uint16_t CPU::addrAbsolute()
+{
+    uint8_t lo = _ram.read(_pc++);
+    uint8_t hi = _ram.read(_pc++);
+
+    uint16_t addr = (static_cast<uint16_t>(hi) << 8) | lo;
+    return addr;
+}
+
+uint16_t CPU::addrAbsoluteX()
+{
+    uint16_t base = addrAbsolute();
+    uint16_t addr = base + _X;
+    if ((base & 0xFF00) != (addr & 0xFF00)) // page boundary crossed
+    {
+        incrementCycles();
+    }
+    return addr;
+}
+
+uint16_t CPU::addrAbsoluteY()
+{
+    uint16_t base = addrAbsolute();
+    uint16_t addr = base + _Y;
+    if ((base & 0xFF00) != (addr & 0xFF00)) // page boundary crossed
+    {
+        incrementCycles();
+    }
+    return addr;
+}
+
+uint16_t CPU::addrImmediate()
+{
+    return _pc++;
+}
+
+void CPU::addrImplied()
+{
+    return;
+}
+
+uint16_t CPU::addrIndirect()
+{
+    uint8_t lo = _ram.read(_pc++);
+    uint8_t hi = _ram.read(_pc++);
+    uint16_t ptr = (static_cast<uint16_t>(hi) << 8) | lo;
+
+    uint8_t addrLo = _ram.read(ptr);
+    uint8_t addrHi = (lo == 0xFF) ? _ram.read(ptr & 0xFF00)
+                                  : _ram.read(ptr + 1);
+    return (static_cast<uint16_t>(addrHi) << 8) | addrLo;
+}
+
+uint16_t CPU::addrIndirectX()
+{
+    uint8_t zp = _ram.read(_pc++);
+    uint8_t ptr = zp + _X;
+
+    uint8_t lo = _ram.read(ptr);
+    uint8_t hi = _ram.read(ptr + 1);
+    return (static_cast<uint16_t>(hi) << 8) | lo;
+}
+
+uint16_t CPU::addrIndirectY()
+{
+    uint8_t zp = _ram.read(_pc++);
+
+    uint8_t lo = _ram.read(zp);
+    uint8_t hi = _ram.read(zp + 1);
+    uint16_t base = (static_cast<uint16_t>(hi) << 8) | lo;
+    uint16_t addr = base + _Y;
+
+    if ((base & 0xFF00) != (addr & 0xFF00)) // page boundary crossed
+    {
+        incrementCycles();
+    }
+
+    return addr;
+}
+
+uint16_t CPU::addrZeroPage()
+{
+    uint8_t zp = _ram.read(_pc++);
+    return zp;
+}
+
+uint16_t CPU::addrZeroPageX()
+{
+    uint8_t zp = _ram.read(_pc++);
+    return static_cast<uint8_t>(zp + _X);
+}
+
+uint16_t CPU::addrZeroPageY()
+{
+    uint8_t zp = _ram.read(_pc++);
+    return static_cast<uint8_t>(zp + _Y);
 }
