@@ -2,10 +2,51 @@
 
 using namespace NES;
 
-CPU::CPU(Region region = Region::NTSC)
+CPU::CPU(Region region)
 {
     CLOCK_FREQUENCY = getClockFrequency(region);
     _ram = RAM();
+}
+
+// ============================================================
+// PUBLIC-FACING METHODS
+// ============================================================
+
+void CPU::reset()
+{
+    _A = 0;
+    _X = 0;
+    _Y = 0;
+    _sp = 0xFD;
+    _status = 0x24; // IRQ disabled, unused flag set
+    _cycles = 0;
+
+    // Setting the program counter to 0x0000 is for testing purposes only. In a real NES, the reset vector is at 0xFFFC.
+    _pc = 0x0000;
+}
+
+void CPU::step()
+{
+    uint8_t opcode = _ram.read(_pc++);
+    decodeAndExecute(opcode);
+}
+
+void CPU::setPC(uint16_t address)
+{
+    _pc = address;
+}
+
+CPU::State CPU::getState() const
+{
+    return State{_A, _X, _Y, _pc, _sp, _status, _cycles};
+}
+
+void CPU::loadProgram(uint16_t address, std::vector<uint8_t> const &bytes)
+{
+    for (size_t i = 0; i < bytes.size(); i++)
+    {
+        _ram.write(address + i, bytes[i]);
+    }
 }
 
 // ============================================================
@@ -36,6 +77,13 @@ void CPU::setX(uint8_t value)
     setFlag(Flags::Z, value == 0);
     setFlag(Flags::N, getBit(value, 7)); // result bit 7
     _X = value;
+}
+
+void CPU::setY(uint8_t value)
+{
+    setFlag(Flags::Z, value == 0);
+    setFlag(Flags::N, getBit(value, 7));
+    _Y = value;
 }
 
 void CPU::push(uint8_t value)
@@ -528,31 +576,32 @@ uint16_t CPU::addrAbsolute()
     return addr;
 }
 
-uint16_t CPU::addrAbsoluteX()
+uint16_t CPU::addrAbsoluteX(bool alwaysCrossPage)
 {
     uint16_t base = addrAbsolute();
     uint16_t addr = base + _X;
-    if ((base & 0xFF00) != (addr & 0xFF00)) // page boundary crossed
+    if (alwaysCrossPage || (base & 0xFF00) != (addr & 0xFF00)) // page boundary crossed
     {
         incrementCycles();
     }
     return addr;
 }
 
-uint16_t CPU::addrAbsoluteY()
+uint16_t CPU::addrAbsoluteY(bool alwaysCrossPage)
 {
     uint16_t base = addrAbsolute();
     uint16_t addr = base + _Y;
-    if ((base & 0xFF00) != (addr & 0xFF00)) // page boundary crossed
+    if (alwaysCrossPage || (base & 0xFF00) != (addr & 0xFF00)) // page boundary crossed
     {
         incrementCycles();
     }
     return addr;
 }
 
-uint16_t CPU::addrImmediate()
+// Returns the immediate value (the byte following the opcode)
+uint8_t CPU::addrImmediate()
 {
-    return _pc++;
+    return _ram.read(_pc++);
 }
 
 void CPU::addrImplied()
@@ -615,4 +664,1096 @@ uint16_t CPU::addrZeroPageY()
 {
     uint8_t zp = _ram.read(_pc++);
     return static_cast<uint8_t>(zp + _Y);
+}
+
+int8_t CPU::addrRelative()
+{
+    return static_cast<int8_t>(_ram.read(_pc++));
+}
+
+// ============================================================
+// FETCH-DECODE-EXECUTE
+// ============================================================
+
+void CPU::decodeAndExecute(uint8_t opcode)
+{
+    switch (opcode)
+    {
+    // Add with Carry
+    case 0x69:
+    {
+        ADC(addrImmediate());
+        incrementCycles(2);
+        break;
+    }
+    case 0x65:
+    {
+        ADC(_ram.read(addrZeroPage()));
+        incrementCycles(3);
+        break;
+    }
+    case 0x75:
+    {
+        ADC(_ram.read(addrZeroPageX()));
+        incrementCycles(4);
+        break;
+    }
+    case 0x6D:
+    {
+        ADC(_ram.read(addrAbsolute()));
+        incrementCycles(4);
+        break;
+    }
+    case 0x7D:
+    {
+        ADC(_ram.read(addrAbsoluteX()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0x79:
+    {
+        ADC(_ram.read(addrAbsoluteY()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0x61:
+    {
+        ADC(_ram.read(addrIndirectX()));
+        incrementCycles(6);
+        break;
+    }
+    case 0x71:
+    {
+        ADC(_ram.read(addrIndirectY()));
+        incrementCycles(5); // +1 if page boundary crossed
+        break;
+    }
+
+    // Bitwise AND
+    case 0x29:
+    {
+        AND(addrImmediate());
+        incrementCycles(2);
+        break;
+    }
+    case 0x25:
+    {
+        AND(_ram.read(addrZeroPage()));
+        incrementCycles(3);
+        break;
+    }
+    case 0x35:
+    {
+        AND(_ram.read(addrZeroPageX()));
+        incrementCycles(4);
+        break;
+    }
+    case 0x2D:
+    {
+        AND(_ram.read(addrAbsolute()));
+        incrementCycles(4);
+        break;
+    }
+    case 0x3D:
+    {
+        AND(_ram.read(addrAbsoluteX()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0x39:
+    {
+        AND(_ram.read(addrAbsoluteY()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0x21:
+    {
+        AND(_ram.read(addrIndirectX()));
+        incrementCycles(6);
+        break;
+    }
+    case 0x31:
+    {
+        AND(_ram.read(addrIndirectY()));
+        incrementCycles(5); // +1 if page boundary crossed
+        break;
+    }
+
+    // Arithmetic Shift Left
+    case 0x0A:
+    {
+        uint8_t value = addrAccumulator();
+        uint8_t result = ASL(value);
+        _A = result;
+        incrementCycles(2);
+        break;
+    }
+    case 0x06:
+    {
+        uint16_t addr = addrZeroPage();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = ASL(value);
+        _ram.write(addr, result);
+        incrementCycles(5);
+        break;
+    }
+    case 0x16:
+    {
+        uint16_t addr = addrZeroPageX();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = ASL(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+    case 0x0E:
+    {
+        uint16_t addr = addrAbsolute();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = ASL(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+    case 0x1E:
+    {
+        uint16_t addr = addrAbsoluteX(true); // always add cycle for page boundary check
+        uint8_t value = _ram.read(addr);
+        uint8_t result = ASL(value);
+        _ram.write(addr, result);
+        incrementCycles(7);
+        break;
+    }
+
+    // Branch if Carry Clear
+    case 0x90:
+    {
+        BCC(addrRelative());
+        incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
+        break;
+    }
+
+    // Branch if Carry Set
+    case 0xB0:
+    {
+        uint16_t prevPc = _pc + 1; // store for page boundary check
+        BCS(addrRelative());
+        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
+            incrementCycles();
+        incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
+        break;
+    }
+
+    // Branch if Equal
+    case 0xF0:
+    {
+        uint16_t prevPc = _pc + 1; // store for page boundary check
+        BEQ(addrRelative());
+        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
+            incrementCycles();
+        incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
+        break;
+    }
+
+    // Bit Test
+    case 0x24:
+    {
+        BIT(_ram.read(addrZeroPage()));
+        incrementCycles(3);
+        break;
+    }
+    case 0x2C:
+    {
+        BIT(_ram.read(addrAbsolute()));
+        incrementCycles(4);
+        break;
+    }
+
+    // Branch if Minus
+    case 0x30:
+    {
+        uint16_t prevPc = _pc + 1; // store for page boundary check
+        BMI(addrRelative());
+        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
+            incrementCycles();
+        incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
+        break;
+    }
+
+    // Branch if Not Equal
+    case 0xD0:
+    {
+        uint16_t prevPc = _pc + 1; // store for page boundary check
+        BNE(addrRelative());
+        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
+            incrementCycles();
+        incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
+        break;
+    }
+
+    // Branch if Plus
+    case 0x10:
+    {
+        uint16_t prevPc = _pc + 1; // store for page boundary check
+        BPL(addrRelative());
+        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
+            incrementCycles();
+        incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
+        break;
+    }
+
+    // Break
+    case 0x00:
+    {
+        BRK();
+        incrementCycles(7);
+        break;
+    }
+
+    // Branch if Overflow Clear
+    case 0x50:
+    {
+        uint16_t prevPc = _pc + 1; // store for page boundary check
+        BVC(addrRelative());
+        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
+            incrementCycles();
+        incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
+        break;
+    }
+
+    // Branch if Overflow Set
+    case 0x70:
+    {
+        uint16_t prevPc = _pc + 1; // store for page boundary check
+        BVS(addrRelative());
+        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
+            incrementCycles();
+        incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
+        break;
+    }
+
+    // Clear Carry
+    case 0x18:
+    {
+        CLC();
+        incrementCycles(2);
+        break;
+    }
+
+    // Clear Decimal
+    case 0xD8:
+    {
+        CLD();
+        incrementCycles(2);
+        break;
+    }
+
+    // Clear Interrup Disable
+    case 0x58:
+    {
+        CLI();
+        incrementCycles(2);
+        break;
+    }
+
+    // Clear Overflow
+    case 0xB8:
+    {
+        CLV();
+        incrementCycles(2);
+        break;
+    }
+
+    // Compare A
+    case 0xC9:
+    {
+        CMP(addrImmediate());
+        incrementCycles(2);
+        break;
+    }
+    case 0xC5:
+    {
+        CMP(_ram.read(addrZeroPage()));
+        incrementCycles(3);
+        break;
+    }
+    case 0xD5:
+    {
+        CMP(_ram.read(addrZeroPageX()));
+        incrementCycles(4);
+        break;
+    }
+    case 0xCD:
+    {
+        CMP(_ram.read(addrAbsolute()));
+        incrementCycles(4);
+        break;
+    }
+    case 0xDD:
+    {
+        CMP(_ram.read(addrAbsoluteX()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0xD9:
+    {
+        CMP(_ram.read(addrAbsoluteY()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0xC1:
+    {
+        CMP(_ram.read(addrIndirectX()));
+        incrementCycles(6);
+        break;
+    }
+    case 0xD1:
+    {
+        CMP(_ram.read(addrIndirectY()));
+        incrementCycles(5); // +1 if page boundary crossed
+        break;
+    }
+
+    // Compare X
+    case 0xE0:
+    {
+        CPX(addrImmediate());
+        incrementCycles(2);
+        break;
+    }
+    case 0xE4:
+    {
+        CPX(_ram.read(addrZeroPage()));
+        incrementCycles(3);
+        break;
+    }
+    case 0xEC:
+    {
+        CPX(_ram.read(addrAbsolute()));
+        incrementCycles(4);
+        break;
+    }
+
+    // Compare Y
+    case 0xC0:
+    {
+        CPY(addrImmediate());
+        incrementCycles(2);
+        break;
+    }
+    case 0xC4:
+    {
+        CPY(_ram.read(addrZeroPage()));
+        incrementCycles(3);
+        break;
+    }
+    case 0xCC:
+    {
+        CPY(_ram.read(addrAbsolute()));
+        incrementCycles(4);
+        break;
+    }
+
+    // Decrement Memory
+    case 0xC6:
+    {
+        uint16_t addr = addrZeroPage();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = DEC(value);
+        _ram.write(addr, result);
+        incrementCycles(5);
+        break;
+    }
+    case 0xD6:
+    {
+        uint16_t addr = addrZeroPageX();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = DEC(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+    case 0xCE:
+    {
+        uint16_t addr = addrAbsolute();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = DEC(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+    case 0xDE:
+    {
+        uint16_t addr = addrAbsoluteX(true); // always add cycle for page boundary check
+        uint8_t value = _ram.read(addr);
+        uint8_t result = DEC(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+
+    // Decrement X
+    case 0xCA:
+    {
+        DEX();
+        incrementCycles(2);
+        break;
+    }
+
+    // Decrement Y
+    case 0x88:
+    {
+        DEY();
+        incrementCycles(2);
+        break;
+    }
+
+    // Bitwise Exclusive OR
+    case 0x49:
+    {
+        EOR(addrImmediate());
+        incrementCycles(2);
+        break;
+    }
+    case 0x45:
+    {
+        EOR(_ram.read(addrZeroPage()));
+        incrementCycles(3);
+        break;
+    }
+    case 0x55:
+    {
+        EOR(_ram.read(addrZeroPageX()));
+        incrementCycles(4);
+        break;
+    }
+    case 0x4D:
+    {
+        EOR(_ram.read(addrAbsolute()));
+        incrementCycles(4);
+        break;
+    }
+    case 0x5D:
+    {
+        EOR(_ram.read(addrAbsoluteX()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0x59:
+    {
+        EOR(_ram.read(addrAbsoluteY()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0x41:
+    {
+        EOR(_ram.read(addrIndirectX()));
+        incrementCycles(6);
+        break;
+    }
+    case 0x51:
+    {
+        EOR(_ram.read(addrIndirectY()));
+        incrementCycles(5); // +1 if page boundary crossed
+        break;
+    }
+
+    // Increment Memory
+    case 0xE6:
+    {
+        uint16_t addr = addrZeroPage();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = INC(value);
+        _ram.write(addr, result);
+        incrementCycles(5);
+        break;
+    }
+    case 0xF6:
+    {
+        uint16_t addr = addrZeroPageX();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = INC(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+    case 0xEE:
+    {
+        uint16_t addr = addrAbsolute();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = INC(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+    case 0xFE:
+    {
+        uint16_t addr = addrAbsoluteX(true); // always add cycle for page boundary check
+        uint8_t value = _ram.read(addr);
+        uint8_t result = INC(value);
+        _ram.write(addr, result);
+        incrementCycles(7);
+        break;
+    }
+
+    // Increment X
+    case 0xE8:
+    {
+        INX();
+        incrementCycles(2);
+        break;
+    }
+
+    // Increment Y
+    case 0xC8:
+    {
+        INY();
+        incrementCycles(2);
+        break;
+    }
+
+    // Jump
+    case 0x4C:
+    {
+        JMP(addrAbsolute());
+        incrementCycles(3);
+        break;
+    }
+
+    // Jump Indirect
+    case 0x6C:
+    {
+        JMP(addrIndirect());
+        incrementCycles(5);
+        break;
+    }
+
+    // Jump to Subroutine
+    case 0x20:
+    {
+        JSR(addrAbsolute());
+        incrementCycles(6);
+        break;
+    }
+
+    // Load A
+    case 0xA9:
+    {
+        LDA(addrImmediate());
+        incrementCycles(2);
+        break;
+    }
+    case 0xA5:
+    {
+        LDA(_ram.read(addrZeroPage()));
+        incrementCycles(3);
+        break;
+    }
+    case 0xB5:
+    {
+        LDA(_ram.read(addrZeroPageX()));
+        incrementCycles(4);
+        break;
+    }
+    case 0xAD:
+    {
+        LDA(_ram.read(addrAbsolute()));
+        incrementCycles(4);
+        break;
+    }
+    case 0xBD:
+    {
+        LDA(_ram.read(addrAbsoluteX()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0xB9:
+    {
+        LDA(_ram.read(addrAbsoluteY()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0xA1:
+    {
+        LDA(_ram.read(addrIndirectX()));
+        incrementCycles(6);
+        break;
+    }
+    case 0xB1:
+    {
+        LDA(_ram.read(addrIndirectY()));
+        incrementCycles(5); // +1 if page boundary crossed
+        break;
+    }
+
+    // Load X
+    case 0xA2:
+    {
+        LDX(addrImmediate());
+        incrementCycles(2);
+        break;
+    }
+    case 0xA6:
+    {
+        LDX(_ram.read(addrZeroPage()));
+        incrementCycles(3);
+        break;
+    }
+    case 0xB6:
+    {
+        LDX(_ram.read(addrZeroPageY()));
+        incrementCycles(4);
+        break;
+    }
+    case 0xAE:
+    {
+        LDX(_ram.read(addrAbsolute()));
+        incrementCycles(4);
+        break;
+    }
+    case 0xBE:
+    {
+        LDX(_ram.read(addrAbsoluteY()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+
+    // Load Y
+    case 0xA0:
+    {
+        LDY(addrImmediate());
+        incrementCycles(2);
+        break;
+    }
+    case 0xA4:
+    {
+        LDY(_ram.read(addrZeroPage()));
+        incrementCycles(3);
+        break;
+    }
+    case 0xB4:
+    {
+        LDY(_ram.read(addrZeroPageX()));
+        incrementCycles(4);
+        break;
+    }
+    case 0xAC:
+    {
+        LDY(_ram.read(addrAbsolute()));
+        incrementCycles(4);
+        break;
+    }
+    case 0xBC:
+    {
+        LDY(_ram.read(addrAbsoluteX()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+
+    // Logical Shift Right
+    case 0x4A:
+    {
+        uint8_t value = addrAccumulator();
+        uint8_t result = LSR(value);
+        _A = result;
+        incrementCycles(2);
+        break;
+    }
+    case 0x46:
+    {
+        uint16_t addr = addrZeroPage();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = LSR(value);
+        _ram.write(addr, result);
+        incrementCycles(5);
+        break;
+    }
+    case 0x56:
+    {
+        uint16_t addr = addrZeroPageX();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = LSR(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+    case 0x4E:
+    {
+        uint16_t addr = addrAbsolute();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = LSR(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+    case 0x5E:
+    {
+        uint16_t addr = addrAbsoluteX(true); // always add cycle for page boundary check
+        uint8_t value = _ram.read(addr);
+        uint8_t result = LSR(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+
+    // No Operation
+    case 0xEA:
+    {
+        NOP();
+        incrementCycles(2);
+        break;
+    }
+
+    // Bitwise OR
+    case 0x09:
+    {
+        ORA(addrImmediate());
+        incrementCycles(2);
+        break;
+    }
+    case 0x05:
+    {
+        ORA(_ram.read(addrZeroPage()));
+        incrementCycles(3);
+        break;
+    }
+    case 0x15:
+    {
+        ORA(_ram.read(addrZeroPageX()));
+        incrementCycles(4);
+        break;
+    }
+    case 0x0D:
+    {
+        ORA(_ram.read(addrAbsolute()));
+        incrementCycles(4);
+        break;
+    }
+    case 0x1D:
+    {
+        ORA(_ram.read(addrAbsoluteX()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0x19:
+    {
+        ORA(_ram.read(addrAbsoluteY()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0x01:
+    {
+        ORA(_ram.read(addrIndirectX()));
+        incrementCycles(6);
+        break;
+    }
+    case 0x11:
+    {
+        ORA(_ram.read(addrIndirectY()));
+        incrementCycles(5); // +1 if page boundary crossed
+        break;
+    }
+
+    // Push A
+    case 0x48:
+    {
+        PHA();
+        incrementCycles(3);
+        break;
+    }
+
+    // Push Processor Status
+    case 0x08:
+    {
+        PHP();
+        incrementCycles(3);
+        break;
+    }
+
+    // Pull Processor Status
+    case 0x28:
+    {
+        PLP();
+        incrementCycles(4);
+        break;
+    }
+
+    // Rotate Left
+    case 0x2A:
+    {
+        uint8_t value = addrAccumulator();
+        uint8_t result = ROL(value);
+        _A = result;
+        incrementCycles(2);
+        break;
+    }
+    case 0x26:
+    {
+        uint16_t addr = addrZeroPage();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = ROL(value);
+        _ram.write(addr, result);
+        incrementCycles(5);
+        break;
+    }
+    case 0x36:
+    {
+        uint16_t addr = addrZeroPageX();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = ROL(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+    case 0x2E:
+    {
+        uint16_t addr = addrAbsolute();
+        uint8_t value = _ram.read(addr);
+        uint8_t result = ROL(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+    case 0x3E:
+    {
+        uint16_t addr = addrAbsoluteX(true); // always add cycle for page boundary check
+        uint8_t value = _ram.read(addr);
+        uint8_t result = ROL(value);
+        _ram.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+
+    // Rotate Right
+    case 0x6A:
+    {
+        uint8_t value = addrAccumulator();
+        uint8_t result = ROR(value);
+        _A = result;
+        incrementCycles(2);
+        break;
+    }
+
+    // Return from Interrupt
+    case 0x40:
+    {
+        RTI();
+        incrementCycles(6);
+        break;
+    }
+
+    // Return from Subroutine
+    case 0x60:
+    {
+        RTS();
+        incrementCycles(6);
+        break;
+    }
+
+    // Subtract with Carry
+    case 0xE9:
+    {
+        SBC(addrImmediate());
+        incrementCycles(2);
+        break;
+    }
+    case 0xE5:
+    {
+        SBC(_ram.read(addrZeroPage()));
+        incrementCycles(3);
+        break;
+    }
+    case 0xF5:
+    {
+        SBC(_ram.read(addrZeroPageX()));
+        incrementCycles(4);
+        break;
+    }
+    case 0xED:
+    {
+        SBC(_ram.read(addrAbsolute()));
+        incrementCycles(4);
+        break;
+    }
+    case 0xFD:
+    {
+        SBC(_ram.read(addrAbsoluteX()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0xF9:
+    {
+        SBC(_ram.read(addrAbsoluteY()));
+        incrementCycles(4); // +1 if page boundary crossed
+        break;
+    }
+    case 0xE1:
+    {
+        SBC(_ram.read(addrIndirectX()));
+        incrementCycles(6);
+        break;
+    }
+    case 0xF1:
+    {
+        SBC(_ram.read(addrIndirectY()));
+        incrementCycles(5); // +1 if page boundary crossed
+        break;
+    }
+
+    // Set Carry
+    case 0x38:
+    {
+        SEC();
+        incrementCycles(2);
+        break;
+    }
+
+    // Set Decimal
+    case 0xF8:
+    {
+        SED();
+        incrementCycles(2);
+        break;
+    }
+
+    // Set Interrupt Disable
+    case 0x78:
+    {
+        SEI();
+        incrementCycles(2);
+        break;
+    }
+
+    // Store A
+    case 0x85:
+    {
+        STA(addrZeroPage());
+        incrementCycles(3);
+        break;
+    }
+    case 0x95:
+    {
+        STA(addrZeroPageX());
+        incrementCycles(4);
+        break;
+    }
+    case 0x8D:
+    {
+        STA(addrAbsolute());
+        incrementCycles(4);
+        break;
+    }
+    case 0x9D:
+    {
+        STA(addrAbsoluteX(true)); // always add cycle for page boundary check
+        incrementCycles(4);       // +1 if page boundary crossed
+        break;
+    }
+    case 0x99:
+    {
+        STA(addrAbsoluteY(true)); // always add cycle for page boundary check
+        incrementCycles(4);       // +1 if page boundary crossed
+        break;
+    }
+    case 0x81:
+    {
+        STA(addrIndirectX());
+        incrementCycles(6);
+        break;
+    }
+    case 0x91:
+    {
+        STA(addrIndirectY());
+        incrementCycles(6);
+        break;
+    }
+
+    // Store X
+    case 0x86:
+    {
+        STX(addrZeroPage());
+        incrementCycles(3);
+        break;
+    }
+    case 0x96:
+    {
+        STX(addrZeroPageY());
+        incrementCycles(4);
+        break;
+    }
+    case 0x8E:
+    {
+        STX(addrAbsolute());
+        incrementCycles(4);
+        break;
+    }
+
+    // Store Y
+    case 0x84:
+    {
+        STY(addrZeroPage());
+        incrementCycles(3);
+        break;
+    }
+    case 0x94:
+    {
+        STY(addrZeroPageX());
+        incrementCycles(4);
+        break;
+    }
+    case 0x8C:
+    {
+        STY(addrAbsolute());
+        incrementCycles(4);
+        break;
+    }
+
+    // Transfer A to X
+    case 0xAA:
+    {
+        TAX();
+        incrementCycles(2);
+        break;
+    }
+
+    // Transfer A to Y
+    case 0xA8:
+    {
+        TAY();
+        incrementCycles(2);
+        break;
+    }
+
+    // Transfer Stack Pointer to X
+    case 0xBA:
+    {
+        TSX();
+        incrementCycles(2);
+        break;
+    }
+
+    // Transfer X to A
+    case 0x8A:
+    {
+        TXA();
+        incrementCycles(2);
+        break;
+    }
+
+    // Transfer X to Stack Pointer
+    case 0x9A:
+    {
+        TXS();
+        incrementCycles(2);
+        break;
+    }
+
+    // Transfer Y to A
+    case 0x98:
+    {
+        TYA();
+        incrementCycles(2);
+        break;
+    }
+    }
 }

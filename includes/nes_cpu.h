@@ -4,14 +4,33 @@
 #include "nes.h"
 #include "nes_ram.h"
 #include <cstdint>
+#include <vector>
 
 namespace NES
 {
     class CPU
     {
     public:
-        
         CPU(Region region = Region::NTSC);
+
+        struct State
+        {
+            uint8_t A;
+            uint8_t X;
+            uint8_t Y;
+            uint16_t PC;
+            uint8_t SP;
+            uint8_t status;
+            uint64_t cycles;
+        };
+
+        void reset();
+        void step();
+        void setPC(uint16_t address);
+        State getState() const;
+
+        // For tests: load bytes directly into RAM
+        void loadProgram(uint16_t address, std::vector<uint8_t> const &bytes);
 
     private:
         uint8_t _A;
@@ -23,17 +42,18 @@ namespace NES
         uint32_t CLOCK_FREQUENCY{1790000};
         RAM _ram;
 
-        uint64_t _cycles {0};
+        uint64_t _cycles{0};
 
-        enum class Flags : uint8_t {
-            C = 0,  // Carry
-            Z = 1,  // Zero
-            I = 2,  // Interrupt Disable
-            D = 3,  // Decimal (unused on NES)
-            B = 4,  // Break
-            U = 5,  // Unused
-            V = 6,  // Overflow
-            N = 7,  // Negative
+        enum class Flags : uint8_t
+        {
+            C = 0, // Carry
+            Z = 1, // Zero
+            I = 2, // Interrupt Disable
+            D = 3, // Decimal (unused on NES)
+            B = 4, // Break
+            U = 5, // Unused
+            V = 6, // Overflow
+            N = 7, // Negative
         };
 
         void setFlag(Flags flag, bool value);
@@ -46,18 +66,19 @@ namespace NES
         uint8_t pull();
 
         // Addressing modes
-        uint8_t     addrAccumulator();
-        uint16_t    addrAbsolute();
-        uint16_t    addrAbsoluteX();
-        uint16_t    addrAbsoluteY();
-        uint16_t     addrImmediate();
-        void        addrImplied();
-        uint16_t    addrIndirect();
-        uint16_t    addrIndirectX();
-        uint16_t    addrIndirectY();
-        uint16_t    addrZeroPage();
-        uint16_t    addrZeroPageX();
-        uint16_t    addrZeroPageY();
+        uint8_t addrAccumulator();
+        uint16_t addrAbsolute();
+        uint16_t addrAbsoluteX(bool alwaysCrossPage = false);
+        uint16_t addrAbsoluteY(bool alwaysCrossPage = false);
+        uint8_t addrImmediate();
+        void addrImplied();
+        uint16_t addrIndirect();
+        uint16_t addrIndirectX();
+        uint16_t addrIndirectY();
+        uint16_t addrZeroPage();
+        uint16_t addrZeroPageX();
+        uint16_t addrZeroPageY();
+        int8_t addrRelative();
 
         // Official instructions
         void ADC(uint8_t memory);
@@ -117,12 +138,16 @@ namespace NES
         void TXS();
         void TYA();
 
+        void decodeAndExecute(uint8_t opcode);
+
         inline uint32_t getClockFrequency(Region region)
         {
-            switch(region)
+            switch (region)
             {
-                case Region::NTSC:  return 1'789'773;
-                case Region::PAL:   return 1'662'607;
+            case Region::NTSC:
+                return 1'789'773;
+            case Region::PAL:
+                return 1'662'607;
             }
         }
 
