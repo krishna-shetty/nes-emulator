@@ -40,11 +40,13 @@ void PPU::destroyWindow() noexcept
     }
 }
 
-void PPU::handleEvents()
+void PPU::handleEvents(std::function<void(SDL_Event&)> callback)
 {
     SDL_Event event;
     while (SDL_PollEvent(&event))
     {
+        if (callback)
+            callback(event);
         if (event.type == SDL_EVENT_QUIT)
             _running = false;
     }

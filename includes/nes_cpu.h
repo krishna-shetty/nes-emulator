@@ -28,6 +28,7 @@ namespace NES
         void step();
         void setPC(uint16_t address);
         State getState() const;
+        uint8_t peek(uint16_t address) const;
 
         // For tests: load bytes directly into RAM
         void loadProgram(uint16_t address, std::vector<uint8_t> const &bytes);

@@ -41,6 +41,11 @@ CPU::State CPU::getState() const
     return State{_A, _X, _Y, _pc, _sp, _status, _cycles};
 }
 
+uint8_t CPU::peek(uint16_t address) const
+{
+    return _ram.read(address);
+}
+
 void CPU::loadProgram(uint16_t address, std::vector<uint8_t> const &bytes)
 {
     for (size_t i = 0; i < bytes.size(); i++)

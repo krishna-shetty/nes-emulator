@@ -1,6 +1,7 @@
 #ifndef NES_PPU_H
 #define NES_PPU_H
 #include <SDL3/SDL.h>
+#include <functional>
 
 namespace NES
 {
@@ -19,7 +20,7 @@ namespace NES
         };
 
         bool isRunning() const { return _running; }
-        void handleEvents();
+        void handleEvents(std::function<void(SDL_Event&)> callback = nullptr);
         void clear();
         void present();
 
