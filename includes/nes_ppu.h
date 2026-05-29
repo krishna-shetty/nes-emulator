@@ -32,6 +32,9 @@ namespace NES
         void setClearColor(Color color);
 
     private:
+        uint8_t _tableName[2][1024]; // 2KB of name tables
+        uint8_t _tablePalette[32]; 
+        
         SDL_Window *_window{nullptr};
         SDL_Renderer *_renderer{nullptr};
         bool _running{true};
