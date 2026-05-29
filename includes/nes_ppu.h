@@ -11,6 +11,11 @@ namespace NES
         PPU(const char *title, int width, int height);
         ~PPU() noexcept;
 
+        PPU(const PPU &) = delete;
+        PPU &operator=(const PPU &) = delete;
+        PPU(PPU &&) = delete;
+        PPU &operator=(PPU &&) = delete;
+
         SDL_Window *getWindow() const { return _window; }
         SDL_Renderer *getRenderer() const { return _renderer; }
 

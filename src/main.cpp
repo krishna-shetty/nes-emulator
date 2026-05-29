@@ -4,12 +4,13 @@
 
 int main()
 {
-    NES::CPU cpu;
+    NES::Bus bus;
+    NES::CPU cpu(bus);
     NES::PPU ppu("NES Emulator", 768, 480);
-    NES::Debugger debugger(cpu, ppu);
+    NES::Debugger debugger(cpu, ppu, bus);
 
     // Load a tiny test program
-    cpu.loadProgram(0x0000, {0xA9, 0x42, 0xE8, 0x4C, 0x02, 0x00}); // LDA #$42, INX, JMP $0002
+    bus.loadProgram(0x0000, {0xA9, 0x42, 0xE8, 0x4C, 0x02, 0x00}); // LDA #$42, INX, JMP $0002
     cpu.reset();
     cpu.setPC(0x0000);
 

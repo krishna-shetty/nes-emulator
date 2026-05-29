@@ -3,8 +3,8 @@
 
 using namespace NES;
 
-Debugger::Debugger(CPU& cpu, PPU& ppu)
-    : _cpu(cpu), _ppu(ppu)
+Debugger::Debugger(CPU& cpu, PPU& ppu, Bus& bus)
+    : _cpu(cpu), _ppu(ppu), _bus(bus)
 {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -33,24 +33,24 @@ Debugger::~Debugger() noexcept
 
 Debugger::DisassembledInstruction Debugger::disassemble(uint16_t address) const
 {
-    uint8_t opcode = _cpu.peek(address);
+    uint8_t opcode = _bus.read(address);
     char buf[32];
 
     switch (opcode)
     {
-        case 0xA9: snprintf(buf, sizeof(buf), "LDA #$%02X",     _cpu.peek(address + 1)); return {address, buf};
-        case 0xA5: snprintf(buf, sizeof(buf), "LDA $%02X",      _cpu.peek(address + 1)); return {address, buf};
-        case 0xAD: snprintf(buf, sizeof(buf), "LDA $%02X%02X",  _cpu.peek(address + 2), _cpu.peek(address + 1)); return {address, buf};
-        case 0xA2: snprintf(buf, sizeof(buf), "LDX #$%02X",     _cpu.peek(address + 1)); return {address, buf};
-        case 0xA0: snprintf(buf, sizeof(buf), "LDY #$%02X",     _cpu.peek(address + 1)); return {address, buf};
-        case 0x69: snprintf(buf, sizeof(buf), "ADC #$%02X",     _cpu.peek(address + 1)); return {address, buf};
-        case 0x65: snprintf(buf, sizeof(buf), "ADC $%02X",      _cpu.peek(address + 1)); return {address, buf};
-        case 0x85: snprintf(buf, sizeof(buf), "STA $%02X",      _cpu.peek(address + 1)); return {address, buf};
-        case 0x8D: snprintf(buf, sizeof(buf), "STA $%02X%02X",  _cpu.peek(address + 2), _cpu.peek(address + 1)); return {address, buf};
-        case 0x4C: snprintf(buf, sizeof(buf), "JMP $%02X%02X",  _cpu.peek(address + 2), _cpu.peek(address + 1)); return {address, buf};
-        case 0x6C: snprintf(buf, sizeof(buf), "JMP ($%02X%02X)",_cpu.peek(address + 2), _cpu.peek(address + 1)); return {address, buf};
-        case 0x20: snprintf(buf, sizeof(buf), "JSR $%02X%02X",  _cpu.peek(address + 2), _cpu.peek(address + 1)); return {address, buf};
-        case 0x60: snprintf(buf, sizeof(buf), "RTS",            _cpu.peek(address + 1)); return {address, buf};
+        case 0xA9: snprintf(buf, sizeof(buf), "LDA #$%02X",     _bus.peek(address + 1)); return {address, buf};
+        case 0xA5: snprintf(buf, sizeof(buf), "LDA $%02X",      _bus.peek(address + 1)); return {address, buf};
+        case 0xAD: snprintf(buf, sizeof(buf), "LDA $%02X%02X",  _bus.peek(address + 2), _bus.peek(address + 1)); return {address, buf};
+        case 0xA2: snprintf(buf, sizeof(buf), "LDX #$%02X",     _bus.peek(address + 1)); return {address, buf};
+        case 0xA0: snprintf(buf, sizeof(buf), "LDY #$%02X",     _bus.peek(address + 1)); return {address, buf};
+        case 0x69: snprintf(buf, sizeof(buf), "ADC #$%02X",     _bus.peek(address + 1)); return {address, buf};
+        case 0x65: snprintf(buf, sizeof(buf), "ADC $%02X",      _bus.peek(address + 1)); return {address, buf};
+        case 0x85: snprintf(buf, sizeof(buf), "STA $%02X",      _bus.peek(address + 1)); return {address, buf};
+        case 0x8D: snprintf(buf, sizeof(buf), "STA $%02X%02X",  _bus.peek(address + 2), _bus.peek(address + 1)); return {address, buf};
+        case 0x4C: snprintf(buf, sizeof(buf), "JMP $%02X%02X",  _bus.peek(address + 2), _bus.peek(address + 1)); return {address, buf};
+        case 0x6C: snprintf(buf, sizeof(buf), "JMP ($%02X%02X)",_bus.peek(address + 2), _bus.peek(address + 1)); return {address, buf};
+        case 0x20: snprintf(buf, sizeof(buf), "JSR $%02X%02X",  _bus.peek(address + 2), _bus.peek(address + 1)); return {address, buf};
+        case 0x60: snprintf(buf, sizeof(buf), "RTS",            _bus.peek(address + 1)); return {address, buf};
         case 0xE8: return {address, "INX"};
         case 0xC8: return {address, "INY"};
         case 0xCA: return {address, "DEX"};
@@ -120,7 +120,7 @@ for (int i = 0; i < 5; i++)
         ImGui::Text("   $%04X: %s", instr.address, instr.text.c_str());
 
     // Advance pc by instruction size
-    uint8_t opcode = _cpu.peek(pc);
+    uint8_t opcode = _bus.peek(pc);
     switch (opcode)
     {
         case 0xA9: case 0xA2: case 0xA0:

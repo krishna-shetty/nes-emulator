@@ -2,10 +2,9 @@
 
 using namespace NES;
 
-CPU::CPU(Region region)
+CPU::CPU(Bus& bus, Region region) : _bus(bus)
 {
     CLOCK_FREQUENCY = getClockFrequency(region);
-    _ram = RAM();
 }
 
 // ============================================================
@@ -27,7 +26,7 @@ void CPU::reset()
 
 void CPU::step()
 {
-    uint8_t opcode = _ram.read(_pc++);
+    uint8_t opcode = _bus.read(_pc++);
     decodeAndExecute(opcode);
 }
 
@@ -39,19 +38,6 @@ void CPU::setPC(uint16_t address)
 CPU::State CPU::getState() const
 {
     return State{_A, _X, _Y, _pc, _sp, _status, _cycles};
-}
-
-uint8_t CPU::peek(uint16_t address) const
-{
-    return _ram.read(address);
-}
-
-void CPU::loadProgram(uint16_t address, std::vector<uint8_t> const &bytes)
-{
-    for (size_t i = 0; i < bytes.size(); i++)
-    {
-        _ram.write(address + i, bytes[i]);
-    }
 }
 
 // ============================================================
@@ -93,14 +79,14 @@ void CPU::setY(uint8_t value)
 
 void CPU::push(uint8_t value)
 {
-    _ram.write(0x0100 | _sp, value);
+    _bus.write(0x0100 | _sp, value);
     _sp--;
 }
 
 uint8_t CPU::pull()
 {
     _sp++;
-    return _ram.read(0x0100 | _sp);
+    return _bus.read(0x0100 | _sp);
 }
 
 void CPU::branch(int8_t offset, bool condition)
@@ -215,8 +201,8 @@ void CPU::BRK()
 
     setFlag(Flags::I, true);
 
-    uint8_t lo = _ram.read(0xFFFE);
-    uint8_t hi = _ram.read(0xFFFF);
+    uint8_t lo = _bus.read(0xFFFE);
+    uint8_t hi = _bus.read(0xFFFF);
     _pc = (static_cast<uint16_t>(hi) << 8) | lo;
 }
 
@@ -513,19 +499,19 @@ void CPU::SEI()
 // Store A
 void CPU::STA(uint16_t memory)
 {
-    _ram.write(memory, _A);
+    _bus.write(memory, _A);
 }
 
 // Store X
 void CPU::STX(uint16_t memory)
 {
-    _ram.write(memory, _X);
+    _bus.write(memory, _X);
 }
 
 // Store Y
 void CPU::STY(uint16_t memory)
 {
-    _ram.write(memory, _Y);
+    _bus.write(memory, _Y);
 }
 
 // Transfer A to X
@@ -574,8 +560,8 @@ uint8_t CPU::addrAccumulator()
 
 uint16_t CPU::addrAbsolute()
 {
-    uint8_t lo = _ram.read(_pc++);
-    uint8_t hi = _ram.read(_pc++);
+    uint8_t lo = _bus.read(_pc++);
+    uint8_t hi = _bus.read(_pc++);
 
     uint16_t addr = (static_cast<uint16_t>(hi) << 8) | lo;
     return addr;
@@ -606,7 +592,7 @@ uint16_t CPU::addrAbsoluteY(bool alwaysCrossPage)
 // Returns the immediate value (the byte following the opcode)
 uint8_t CPU::addrImmediate()
 {
-    return _ram.read(_pc++);
+    return _bus.read(_pc++);
 }
 
 void CPU::addrImplied()
@@ -616,32 +602,32 @@ void CPU::addrImplied()
 
 uint16_t CPU::addrIndirect()
 {
-    uint8_t lo = _ram.read(_pc++);
-    uint8_t hi = _ram.read(_pc++);
+    uint8_t lo = _bus.read(_pc++);
+    uint8_t hi = _bus.read(_pc++);
     uint16_t ptr = (static_cast<uint16_t>(hi) << 8) | lo;
 
-    uint8_t addrLo = _ram.read(ptr);
-    uint8_t addrHi = (lo == 0xFF) ? _ram.read(ptr & 0xFF00)
-                                  : _ram.read(ptr + 1);
+    uint8_t addrLo = _bus.read(ptr);
+    uint8_t addrHi = (lo == 0xFF) ? _bus.read(ptr & 0xFF00)
+                                  : _bus.read(ptr + 1);
     return (static_cast<uint16_t>(addrHi) << 8) | addrLo;
 }
 
 uint16_t CPU::addrIndirectX()
 {
-    uint8_t zp = _ram.read(_pc++);
+    uint8_t zp = _bus.read(_pc++);
     uint8_t ptr = zp + _X;
 
-    uint8_t lo = _ram.read(ptr);
-    uint8_t hi = _ram.read(ptr + 1);
+    uint8_t lo = _bus.read(ptr);
+    uint8_t hi = _bus.read(ptr + 1);
     return (static_cast<uint16_t>(hi) << 8) | lo;
 }
 
 uint16_t CPU::addrIndirectY()
 {
-    uint8_t zp = _ram.read(_pc++);
+    uint8_t zp = _bus.read(_pc++);
 
-    uint8_t lo = _ram.read(zp);
-    uint8_t hi = _ram.read(zp + 1);
+    uint8_t lo = _bus.read(zp);
+    uint8_t hi = _bus.read(zp + 1);
     uint16_t base = (static_cast<uint16_t>(hi) << 8) | lo;
     uint16_t addr = base + _Y;
 
@@ -655,25 +641,25 @@ uint16_t CPU::addrIndirectY()
 
 uint16_t CPU::addrZeroPage()
 {
-    uint8_t zp = _ram.read(_pc++);
+    uint8_t zp = _bus.read(_pc++);
     return zp;
 }
 
 uint16_t CPU::addrZeroPageX()
 {
-    uint8_t zp = _ram.read(_pc++);
+    uint8_t zp = _bus.read(_pc++);
     return static_cast<uint8_t>(zp + _X);
 }
 
 uint16_t CPU::addrZeroPageY()
 {
-    uint8_t zp = _ram.read(_pc++);
+    uint8_t zp = _bus.read(_pc++);
     return static_cast<uint8_t>(zp + _Y);
 }
 
 int8_t CPU::addrRelative()
 {
-    return static_cast<int8_t>(_ram.read(_pc++));
+    return static_cast<int8_t>(_bus.read(_pc++));
 }
 
 // ============================================================
@@ -693,43 +679,43 @@ void CPU::decodeAndExecute(uint8_t opcode)
     }
     case 0x65:
     {
-        ADC(_ram.read(addrZeroPage()));
+        ADC(_bus.read(addrZeroPage()));
         incrementCycles(3);
         break;
     }
     case 0x75:
     {
-        ADC(_ram.read(addrZeroPageX()));
+        ADC(_bus.read(addrZeroPageX()));
         incrementCycles(4);
         break;
     }
     case 0x6D:
     {
-        ADC(_ram.read(addrAbsolute()));
+        ADC(_bus.read(addrAbsolute()));
         incrementCycles(4);
         break;
     }
     case 0x7D:
     {
-        ADC(_ram.read(addrAbsoluteX()));
+        ADC(_bus.read(addrAbsoluteX()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0x79:
     {
-        ADC(_ram.read(addrAbsoluteY()));
+        ADC(_bus.read(addrAbsoluteY()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0x61:
     {
-        ADC(_ram.read(addrIndirectX()));
+        ADC(_bus.read(addrIndirectX()));
         incrementCycles(6);
         break;
     }
     case 0x71:
     {
-        ADC(_ram.read(addrIndirectY()));
+        ADC(_bus.read(addrIndirectY()));
         incrementCycles(5); // +1 if page boundary crossed
         break;
     }
@@ -743,43 +729,43 @@ void CPU::decodeAndExecute(uint8_t opcode)
     }
     case 0x25:
     {
-        AND(_ram.read(addrZeroPage()));
+        AND(_bus.read(addrZeroPage()));
         incrementCycles(3);
         break;
     }
     case 0x35:
     {
-        AND(_ram.read(addrZeroPageX()));
+        AND(_bus.read(addrZeroPageX()));
         incrementCycles(4);
         break;
     }
     case 0x2D:
     {
-        AND(_ram.read(addrAbsolute()));
+        AND(_bus.read(addrAbsolute()));
         incrementCycles(4);
         break;
     }
     case 0x3D:
     {
-        AND(_ram.read(addrAbsoluteX()));
+        AND(_bus.read(addrAbsoluteX()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0x39:
     {
-        AND(_ram.read(addrAbsoluteY()));
+        AND(_bus.read(addrAbsoluteY()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0x21:
     {
-        AND(_ram.read(addrIndirectX()));
+        AND(_bus.read(addrIndirectX()));
         incrementCycles(6);
         break;
     }
     case 0x31:
     {
-        AND(_ram.read(addrIndirectY()));
+        AND(_bus.read(addrIndirectY()));
         incrementCycles(5); // +1 if page boundary crossed
         break;
     }
@@ -796,36 +782,36 @@ void CPU::decodeAndExecute(uint8_t opcode)
     case 0x06:
     {
         uint16_t addr = addrZeroPage();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = ASL(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(5);
         break;
     }
     case 0x16:
     {
         uint16_t addr = addrZeroPageX();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = ASL(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
     case 0x0E:
     {
         uint16_t addr = addrAbsolute();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = ASL(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
     case 0x1E:
     {
         uint16_t addr = addrAbsoluteX(true); // always add cycle for page boundary check
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = ASL(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(7);
         break;
     }
@@ -863,13 +849,13 @@ void CPU::decodeAndExecute(uint8_t opcode)
     // Bit Test
     case 0x24:
     {
-        BIT(_ram.read(addrZeroPage()));
+        BIT(_bus.read(addrZeroPage()));
         incrementCycles(3);
         break;
     }
     case 0x2C:
     {
-        BIT(_ram.read(addrAbsolute()));
+        BIT(_bus.read(addrAbsolute()));
         incrementCycles(4);
         break;
     }
@@ -978,43 +964,43 @@ void CPU::decodeAndExecute(uint8_t opcode)
     }
     case 0xC5:
     {
-        CMP(_ram.read(addrZeroPage()));
+        CMP(_bus.read(addrZeroPage()));
         incrementCycles(3);
         break;
     }
     case 0xD5:
     {
-        CMP(_ram.read(addrZeroPageX()));
+        CMP(_bus.read(addrZeroPageX()));
         incrementCycles(4);
         break;
     }
     case 0xCD:
     {
-        CMP(_ram.read(addrAbsolute()));
+        CMP(_bus.read(addrAbsolute()));
         incrementCycles(4);
         break;
     }
     case 0xDD:
     {
-        CMP(_ram.read(addrAbsoluteX()));
+        CMP(_bus.read(addrAbsoluteX()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0xD9:
     {
-        CMP(_ram.read(addrAbsoluteY()));
+        CMP(_bus.read(addrAbsoluteY()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0xC1:
     {
-        CMP(_ram.read(addrIndirectX()));
+        CMP(_bus.read(addrIndirectX()));
         incrementCycles(6);
         break;
     }
     case 0xD1:
     {
-        CMP(_ram.read(addrIndirectY()));
+        CMP(_bus.read(addrIndirectY()));
         incrementCycles(5); // +1 if page boundary crossed
         break;
     }
@@ -1028,13 +1014,13 @@ void CPU::decodeAndExecute(uint8_t opcode)
     }
     case 0xE4:
     {
-        CPX(_ram.read(addrZeroPage()));
+        CPX(_bus.read(addrZeroPage()));
         incrementCycles(3);
         break;
     }
     case 0xEC:
     {
-        CPX(_ram.read(addrAbsolute()));
+        CPX(_bus.read(addrAbsolute()));
         incrementCycles(4);
         break;
     }
@@ -1048,13 +1034,13 @@ void CPU::decodeAndExecute(uint8_t opcode)
     }
     case 0xC4:
     {
-        CPY(_ram.read(addrZeroPage()));
+        CPY(_bus.read(addrZeroPage()));
         incrementCycles(3);
         break;
     }
     case 0xCC:
     {
-        CPY(_ram.read(addrAbsolute()));
+        CPY(_bus.read(addrAbsolute()));
         incrementCycles(4);
         break;
     }
@@ -1063,36 +1049,36 @@ void CPU::decodeAndExecute(uint8_t opcode)
     case 0xC6:
     {
         uint16_t addr = addrZeroPage();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = DEC(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(5);
         break;
     }
     case 0xD6:
     {
         uint16_t addr = addrZeroPageX();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = DEC(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
     case 0xCE:
     {
         uint16_t addr = addrAbsolute();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = DEC(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
     case 0xDE:
     {
         uint16_t addr = addrAbsoluteX(true); // always add cycle for page boundary check
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = DEC(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
@@ -1122,43 +1108,43 @@ void CPU::decodeAndExecute(uint8_t opcode)
     }
     case 0x45:
     {
-        EOR(_ram.read(addrZeroPage()));
+        EOR(_bus.read(addrZeroPage()));
         incrementCycles(3);
         break;
     }
     case 0x55:
     {
-        EOR(_ram.read(addrZeroPageX()));
+        EOR(_bus.read(addrZeroPageX()));
         incrementCycles(4);
         break;
     }
     case 0x4D:
     {
-        EOR(_ram.read(addrAbsolute()));
+        EOR(_bus.read(addrAbsolute()));
         incrementCycles(4);
         break;
     }
     case 0x5D:
     {
-        EOR(_ram.read(addrAbsoluteX()));
+        EOR(_bus.read(addrAbsoluteX()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0x59:
     {
-        EOR(_ram.read(addrAbsoluteY()));
+        EOR(_bus.read(addrAbsoluteY()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0x41:
     {
-        EOR(_ram.read(addrIndirectX()));
+        EOR(_bus.read(addrIndirectX()));
         incrementCycles(6);
         break;
     }
     case 0x51:
     {
-        EOR(_ram.read(addrIndirectY()));
+        EOR(_bus.read(addrIndirectY()));
         incrementCycles(5); // +1 if page boundary crossed
         break;
     }
@@ -1167,36 +1153,36 @@ void CPU::decodeAndExecute(uint8_t opcode)
     case 0xE6:
     {
         uint16_t addr = addrZeroPage();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = INC(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(5);
         break;
     }
     case 0xF6:
     {
         uint16_t addr = addrZeroPageX();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = INC(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
     case 0xEE:
     {
         uint16_t addr = addrAbsolute();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = INC(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
     case 0xFE:
     {
         uint16_t addr = addrAbsoluteX(true); // always add cycle for page boundary check
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = INC(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(7);
         break;
     }
@@ -1250,43 +1236,43 @@ void CPU::decodeAndExecute(uint8_t opcode)
     }
     case 0xA5:
     {
-        LDA(_ram.read(addrZeroPage()));
+        LDA(_bus.read(addrZeroPage()));
         incrementCycles(3);
         break;
     }
     case 0xB5:
     {
-        LDA(_ram.read(addrZeroPageX()));
+        LDA(_bus.read(addrZeroPageX()));
         incrementCycles(4);
         break;
     }
     case 0xAD:
     {
-        LDA(_ram.read(addrAbsolute()));
+        LDA(_bus.read(addrAbsolute()));
         incrementCycles(4);
         break;
     }
     case 0xBD:
     {
-        LDA(_ram.read(addrAbsoluteX()));
+        LDA(_bus.read(addrAbsoluteX()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0xB9:
     {
-        LDA(_ram.read(addrAbsoluteY()));
+        LDA(_bus.read(addrAbsoluteY()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0xA1:
     {
-        LDA(_ram.read(addrIndirectX()));
+        LDA(_bus.read(addrIndirectX()));
         incrementCycles(6);
         break;
     }
     case 0xB1:
     {
-        LDA(_ram.read(addrIndirectY()));
+        LDA(_bus.read(addrIndirectY()));
         incrementCycles(5); // +1 if page boundary crossed
         break;
     }
@@ -1300,25 +1286,25 @@ void CPU::decodeAndExecute(uint8_t opcode)
     }
     case 0xA6:
     {
-        LDX(_ram.read(addrZeroPage()));
+        LDX(_bus.read(addrZeroPage()));
         incrementCycles(3);
         break;
     }
     case 0xB6:
     {
-        LDX(_ram.read(addrZeroPageY()));
+        LDX(_bus.read(addrZeroPageY()));
         incrementCycles(4);
         break;
     }
     case 0xAE:
     {
-        LDX(_ram.read(addrAbsolute()));
+        LDX(_bus.read(addrAbsolute()));
         incrementCycles(4);
         break;
     }
     case 0xBE:
     {
-        LDX(_ram.read(addrAbsoluteY()));
+        LDX(_bus.read(addrAbsoluteY()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
@@ -1332,25 +1318,25 @@ void CPU::decodeAndExecute(uint8_t opcode)
     }
     case 0xA4:
     {
-        LDY(_ram.read(addrZeroPage()));
+        LDY(_bus.read(addrZeroPage()));
         incrementCycles(3);
         break;
     }
     case 0xB4:
     {
-        LDY(_ram.read(addrZeroPageX()));
+        LDY(_bus.read(addrZeroPageX()));
         incrementCycles(4);
         break;
     }
     case 0xAC:
     {
-        LDY(_ram.read(addrAbsolute()));
+        LDY(_bus.read(addrAbsolute()));
         incrementCycles(4);
         break;
     }
     case 0xBC:
     {
-        LDY(_ram.read(addrAbsoluteX()));
+        LDY(_bus.read(addrAbsoluteX()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
@@ -1367,36 +1353,36 @@ void CPU::decodeAndExecute(uint8_t opcode)
     case 0x46:
     {
         uint16_t addr = addrZeroPage();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = LSR(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(5);
         break;
     }
     case 0x56:
     {
         uint16_t addr = addrZeroPageX();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = LSR(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
     case 0x4E:
     {
         uint16_t addr = addrAbsolute();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = LSR(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
     case 0x5E:
     {
         uint16_t addr = addrAbsoluteX(true); // always add cycle for page boundary check
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = LSR(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
@@ -1418,43 +1404,43 @@ void CPU::decodeAndExecute(uint8_t opcode)
     }
     case 0x05:
     {
-        ORA(_ram.read(addrZeroPage()));
+        ORA(_bus.read(addrZeroPage()));
         incrementCycles(3);
         break;
     }
     case 0x15:
     {
-        ORA(_ram.read(addrZeroPageX()));
+        ORA(_bus.read(addrZeroPageX()));
         incrementCycles(4);
         break;
     }
     case 0x0D:
     {
-        ORA(_ram.read(addrAbsolute()));
+        ORA(_bus.read(addrAbsolute()));
         incrementCycles(4);
         break;
     }
     case 0x1D:
     {
-        ORA(_ram.read(addrAbsoluteX()));
+        ORA(_bus.read(addrAbsoluteX()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0x19:
     {
-        ORA(_ram.read(addrAbsoluteY()));
+        ORA(_bus.read(addrAbsoluteY()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0x01:
     {
-        ORA(_ram.read(addrIndirectX()));
+        ORA(_bus.read(addrIndirectX()));
         incrementCycles(6);
         break;
     }
     case 0x11:
     {
-        ORA(_ram.read(addrIndirectY()));
+        ORA(_bus.read(addrIndirectY()));
         incrementCycles(5); // +1 if page boundary crossed
         break;
     }
@@ -1495,36 +1481,36 @@ void CPU::decodeAndExecute(uint8_t opcode)
     case 0x26:
     {
         uint16_t addr = addrZeroPage();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = ROL(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(5);
         break;
     }
     case 0x36:
     {
         uint16_t addr = addrZeroPageX();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = ROL(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
     case 0x2E:
     {
         uint16_t addr = addrAbsolute();
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = ROL(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
     case 0x3E:
     {
         uint16_t addr = addrAbsoluteX(true); // always add cycle for page boundary check
-        uint8_t value = _ram.read(addr);
+        uint8_t value = _bus.read(addr);
         uint8_t result = ROL(value);
-        _ram.write(addr, result);
+        _bus.write(addr, result);
         incrementCycles(6);
         break;
     }
@@ -1564,43 +1550,43 @@ void CPU::decodeAndExecute(uint8_t opcode)
     }
     case 0xE5:
     {
-        SBC(_ram.read(addrZeroPage()));
+        SBC(_bus.read(addrZeroPage()));
         incrementCycles(3);
         break;
     }
     case 0xF5:
     {
-        SBC(_ram.read(addrZeroPageX()));
+        SBC(_bus.read(addrZeroPageX()));
         incrementCycles(4);
         break;
     }
     case 0xED:
     {
-        SBC(_ram.read(addrAbsolute()));
+        SBC(_bus.read(addrAbsolute()));
         incrementCycles(4);
         break;
     }
     case 0xFD:
     {
-        SBC(_ram.read(addrAbsoluteX()));
+        SBC(_bus.read(addrAbsoluteX()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0xF9:
     {
-        SBC(_ram.read(addrAbsoluteY()));
+        SBC(_bus.read(addrAbsoluteY()));
         incrementCycles(4); // +1 if page boundary crossed
         break;
     }
     case 0xE1:
     {
-        SBC(_ram.read(addrIndirectX()));
+        SBC(_bus.read(addrIndirectX()));
         incrementCycles(6);
         break;
     }
     case 0xF1:
     {
-        SBC(_ram.read(addrIndirectY()));
+        SBC(_bus.read(addrIndirectY()));
         incrementCycles(5); // +1 if page boundary crossed
         break;
     }

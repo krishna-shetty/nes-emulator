@@ -2,7 +2,7 @@
 #define NES_CPU_H
 
 #include "nes.h"
-#include "nes_ram.h"
+#include "nes_bus.h"
 #include <cstdint>
 #include <vector>
 
@@ -11,7 +11,12 @@ namespace NES
     class CPU
     {
     public:
-        CPU(Region region = Region::NTSC);
+        CPU(Bus &bus, Region region = Region::NTSC);
+
+        CPU(const CPU &) = delete;
+        CPU &operator=(const CPU &) = delete;
+        CPU(CPU &&) = delete;
+        CPU &operator=(CPU &&) = delete;
 
         struct State
         {
@@ -28,10 +33,6 @@ namespace NES
         void step();
         void setPC(uint16_t address);
         State getState() const;
-        uint8_t peek(uint16_t address) const;
-
-        // For tests: load bytes directly into RAM
-        void loadProgram(uint16_t address, std::vector<uint8_t> const &bytes);
 
     private:
         uint8_t _A;
@@ -41,7 +42,8 @@ namespace NES
         uint8_t _sp;
         uint8_t _status;
         uint32_t CLOCK_FREQUENCY{1790000};
-        RAM _ram;
+
+        Bus& _bus;
 
         uint64_t _cycles{0};
 

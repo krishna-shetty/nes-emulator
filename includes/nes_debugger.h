@@ -12,14 +12,20 @@ namespace NES
     class Debugger
     {
     public:
-        Debugger(CPU &cpu, PPU &ppu);
+        Debugger(CPU &cpu, PPU &ppu, Bus &bus);
         ~Debugger() noexcept;
+
+        Debugger(const Debugger &) = delete;
+        Debugger &operator=(const Debugger &) = delete;
+        Debugger(Debugger &&) = delete;
+        Debugger &operator=(Debugger &&) = delete;
 
         void render();
 
     private:
-        CPU &_cpu;
-        PPU &_ppu;
+        CPU& _cpu;
+        PPU& _ppu;
+        Bus& _bus;
 
         struct DisassembledInstruction
         {
