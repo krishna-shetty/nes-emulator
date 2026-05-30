@@ -46,7 +46,7 @@ Cartridge::Cartridge(const std::string &filename)
             file.read(reinterpret_cast<char*>(_chrROM.data()), _chrROM.size());
         }
         
-        file.close();
+        _mapper = createMapper(_mapperID, _numPRGBanks, _numCHRBanks);
     }
 }
     
@@ -68,4 +68,69 @@ uint8_t Cartridge::getFileFormatVersion() const
     }
 
     throw std::runtime_error("Unsupported file format");
+}
+
+std::unique_ptr<Mapper> Cartridge::createMapper(uint8_t mapperID, uint8_t numPRGBanks, uint8_t numCHRBanks)
+{
+    switch (mapperID)
+    {
+        case 0:
+            return std::make_unique<Mapper000>(numPRGBanks, numCHRBanks);
+        default:
+            throw std::runtime_error("Unsupported mapper ID: " + std::to_string(mapperID));
+    }
+}
+
+std::optional<uint8_t> Cartridge::cpuRead(uint16_t address) const
+{
+    if (_mapper)
+    {
+        std::optional<uint32_t> addr = _mapper->cpuRead(address);
+
+        if(addr.has_value())
+        {
+            return _prgROM[addr.value()];
+        }
+    }
+    return std::nullopt;
+}
+
+void Cartridge::cpuWrite(uint16_t address, uint8_t value)
+{
+    if (_mapper)
+    {
+        std::optional<uint32_t> addr = _mapper->cpuWrite(address);
+
+        if (addr.has_value())
+        {
+            _prgROM[addr.value()] = value;
+        }
+    }
+}
+
+std::optional<uint8_t> Cartridge::ppuRead(uint16_t address) const
+{
+    if (_mapper)
+    {
+        std::optional<uint32_t> addr = _mapper->ppuRead(address);
+
+        if(addr.has_value())
+        {
+            return _chrROM[addr.value()];
+        }
+    }
+    return std::nullopt;
+}
+
+void Cartridge::ppuWrite(uint16_t address, uint8_t value)
+{
+    if (_mapper)
+    {
+        std::optional<uint32_t> addr = _mapper->ppuWrite(address);
+
+        if (addr.has_value())
+        {
+            _chrROM[addr.value()] = value;
+        }
+    }
 }

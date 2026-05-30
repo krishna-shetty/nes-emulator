@@ -2,6 +2,7 @@
 #define NES_MAPPER_H
 
 #include <cstdint>
+#include <optional>
 
 namespace NES
 {
@@ -11,8 +12,10 @@ namespace NES
         Mapper(uint8_t numPRGBanks, uint8_t numCHRBanks);
        virtual ~Mapper() = default;
 
-        virtual uint8_t read(uint16_t address) = 0;
-        virtual void write(uint16_t address, uint8_t value) = 0;
+        virtual std::optional<uint32_t> cpuRead(uint16_t address) = 0;
+        virtual std::optional<uint32_t> cpuWrite(uint16_t address) = 0;
+        virtual std::optional<uint32_t> ppuRead(uint16_t address) = 0;
+        virtual std::optional<uint32_t> ppuWrite(uint16_t address) = 0;
     protected:
         uint8_t _numPRGBanks{0};
         uint8_t _numCHRBanks{0};    
