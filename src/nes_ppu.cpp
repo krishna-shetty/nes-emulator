@@ -67,3 +67,19 @@ void PPU::setClearColor(Color color)
 {
     _clearColor = color;
 }
+
+void PPU::clock()
+{
+    _cycle++;
+
+    if (_cycle > 340)
+    {
+        _cycle = 0;
+        _scanline++;
+        if (_scanline >= 261)
+        {
+            _scanline = -1;
+            _frameComplete = true;
+        }
+    }
+}

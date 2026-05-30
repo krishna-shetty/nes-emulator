@@ -28,12 +28,18 @@ namespace NES
         void handleEvents(std::function<void(SDL_Event&)> callback = nullptr);
         void clear();
         void present();
+        void clock();
 
         void setClearColor(Color color);
 
     private:
         uint8_t _tableName[2][1024]; // 2KB of name tables
         uint8_t _tablePalette[32]; 
+
+        int16_t _scanline{0};
+        int16_t _cycle{0};
+
+        bool _frameComplete{false};
         
         SDL_Window *_window{nullptr};
         SDL_Renderer *_renderer{nullptr};
