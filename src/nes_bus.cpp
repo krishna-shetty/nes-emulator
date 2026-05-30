@@ -78,5 +78,15 @@ uint8_t Bus::peek(uint16_t address) const
 {
     if (address < 0x2000)
         return _ram.read(address & 0x07FF);
-    return 0;
+    if (address >= 0x8000) // cartridge ROM
+    {
+        auto data = _cartridge->cpuRead(address);
+        if (data) return *data;
+    }
+    return 0; 
+}
+
+void Bus::loadCartridge(std::shared_ptr<Cartridge> cartridge)
+{
+    _cartridge = cartridge;
 }
