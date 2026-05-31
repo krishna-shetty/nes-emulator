@@ -4,7 +4,7 @@ using namespace NES;
 
 CPU::CPU(Bus& bus, Region region) : _bus(bus)
 {
-    CLOCK_FREQUENCY = getClockFrequency(region);
+    CLOCK_FREQUENCY = getClockFrequencyForRegion(region);
 }
 
 // ============================================================
@@ -24,7 +24,7 @@ void CPU::reset()
     _pc = 0x0000;
 }
 
-void CPU::step()
+void CPU::clock()
 {
     uint8_t opcode = _bus.read(_pc++);
     decodeAndExecute(opcode);
@@ -38,6 +38,11 @@ void CPU::setPC(uint16_t address)
 CPU::State CPU::getState() const
 {
     return State{_A, _X, _Y, _pc, _sp, _status, _cycles};
+}
+
+uint32_t CPU::getClockFrequency() const
+{
+    return CLOCK_FREQUENCY;
 }
 
 // ============================================================
@@ -547,6 +552,27 @@ void CPU::TXS()
 void CPU::TYA()
 {
     setAccumulator(_Y);
+}
+
+
+// Non-Maskable Interrupt (NMI) 
+void CPU::NMI()
+{
+    push((_pc >> 8) & 0xFF);
+    push(_pc & 0xFF);
+
+    uint8_t pushedStatus = _status;
+    setBit(pushedStatus, static_cast<uint8_t>(Flags::U));
+    clearBit(pushedStatus, static_cast<uint8_t>(Flags::B)); // B flag cleared for NMI
+    push(pushedStatus);
+
+    setFlag(Flags::I, true);
+
+    uint8_t lo = _bus.read(0xFFFA);
+    uint8_t hi = _bus.read(0xFFFB);
+    _pc = (static_cast<uint16_t>(hi) << 8) | lo;
+
+    incrementCycles(8);
 }
 
 // ============================================================

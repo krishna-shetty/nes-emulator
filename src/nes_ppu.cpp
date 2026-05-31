@@ -1,6 +1,6 @@
 #include "nes_ppu.h"
 #include <stdexcept>
-#include "nes.h"
+#include "nes_utils.h"
 
 using namespace NES;
 
@@ -25,6 +25,7 @@ void PPU::createWindow(const char *title, int width, int height)
         SDL_Quit();
         throw std::runtime_error(SDL_GetError());
     }
+    SDL_SetRenderVSync(_renderer, 1);
 }
 
 void PPU::destroyWindow() noexcept

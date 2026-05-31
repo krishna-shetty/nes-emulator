@@ -4,6 +4,7 @@
 
 using namespace NES;
 
+
 enum class AddrMode : uint8_t
 {
     IMP, ACC, IMM, ZP, ZPX, ZPY,
@@ -129,25 +130,16 @@ static uint8_t instructionSize(AddrMode mode)
 // Debugger
 // ----------------------------------------------------------------------------
 
-Debugger::Debugger(CPU& cpu, PPU& ppu, Bus& bus)
-    : _cpu(cpu), _ppu(ppu), _bus(bus)
+Debugger::Debugger(Emulator &emulator)
+    : _cpu(emulator.getCPU())
+    , _ppu(emulator.getPPU())
+    , _bus(emulator.getBus())
 {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
-
-    if (!ImGui_ImplSDL3_InitForSDLRenderer(_ppu.getWindow(), _ppu.getRenderer()))
-    {
-        ImGui::DestroyContext();
-        throw std::runtime_error("Failed to initialize ImGui SDL3 backend");
-    }
-
-    if (!ImGui_ImplSDLRenderer3_Init(_ppu.getRenderer()))
-    {
-        ImGui_ImplSDL3_Shutdown();
-        ImGui::DestroyContext();
-        throw std::runtime_error("Failed to initialize ImGui SDL3 renderer backend");
-    }
+    ImGui_ImplSDL3_InitForSDLRenderer(_ppu.getWindow(), _ppu.getRenderer());
+    ImGui_ImplSDLRenderer3_Init(_ppu.getRenderer());
 }
 
 Debugger::~Debugger() noexcept
@@ -234,7 +226,7 @@ void Debugger::render()
     ImGui::Separator();
 
     if (ImGui::Button("Step"))
-        _cpu.step();
+        _cpu.clock();
 
     ImGui::End();
 

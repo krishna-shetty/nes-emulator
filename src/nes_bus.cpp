@@ -86,7 +86,7 @@ uint8_t Bus::peek(uint16_t address) const
     return 0; 
 }
 
-void Bus::loadCartridge(std::shared_ptr<Cartridge> cartridge)
+void Bus::insertCartridge(std::shared_ptr<Cartridge> cartridge)
 {
     _cartridge = cartridge;
 }

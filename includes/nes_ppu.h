@@ -9,6 +9,38 @@ namespace NES
     class PPU
     {
     public:
+        enum class Status : uint8_t
+        {
+            V = 7, // Vertical blank
+            S = 6, // Sprite 0 Hit
+            O = 5, // Sprite Overflow
+        };
+
+        enum class Mask : uint8_t
+        {
+            G = 0,  // Greyscale
+            m = 1,  // Background left column enable
+            M = 2,  // Sprite left column enable
+            b = 3,  // Background enable
+            s = 4,  // Sprite enable
+            R = 5,  // Emphasize red
+            Gr = 6, // Emphasize green
+            B = 7,  // Emphasize blue
+        };
+
+        enum class Control : uint8_t
+        {
+            Nx = 0, // Nametable select / X scroll bit
+            Ny = 1, // Nametable select / Y scroll bit
+            I = 2,  // Increment mode
+            S = 3,  // Sprite tile select
+            B = 4,  // Background tile select
+            H = 5,  // Sprite height
+            P = 6,  // PPU master/slave select
+            V = 7,  // NMI enable
+        };
+
+    public:
         PPU(const char *title, int width, int height);
         ~PPU() noexcept;
 
@@ -102,6 +134,13 @@ namespace NES
 
         void insertCartridge(std::shared_ptr<Cartridge> cartridge);
 
+        void setFlag(Control flag, bool value);
+        void setFlag(Mask flag, bool value);
+        void setFlag(Status flag, bool value);
+        uint8_t getFlag(Control flag) const;
+        uint8_t getFlag(Mask flag) const;
+        uint8_t getFlag(Status flag) const;
+
     private:
         uint8_t _tableName[2][1024]; // 2KB of name tables
         uint8_t _tablePalette[32];
@@ -119,51 +158,13 @@ namespace NES
 
         SDL_Color _clearColor{0, 0, 0, 255};
 
-        enum class Status : uint8_t
-        {
-            V = 7, // Vertical blank
-            S = 6, // Sprite 0 Hit
-            O = 5, // Sprite Overflow
-        };
-
-        enum class Mask : uint8_t
-        {
-            G = 0,  // Greyscale
-            m = 1,  // Background left column enable
-            M = 2,  // Sprite left column enable
-            b = 3,  // Background enable
-            s = 4,  // Sprite enable
-            R = 5,  // Emphasize red
-            Gr = 6, // Emphasize green
-            B = 7,  // Emphasize blue
-        };
-
-        enum class Control : uint8_t
-        {
-            Nx = 0, // Nametable select / X scroll bit
-            Ny = 1, // Nametable select / Y scroll bit
-            I = 2,  // Increment mode
-            S = 3,  // Sprite tile select
-            B = 4,  // Background tile select
-            H = 5,  // Sprite height
-            P = 6,  // PPU master/slave select
-            V = 7,  // NMI enable
-        };
-
         uint8_t _control{0};
         uint8_t _mask{0};
         uint8_t _status{0};
-        
+
         uint8_t _addressLatch{0};
         uint8_t _ppuDataBuffer{0};
         uint16_t _vramAddress{0};
-
-        void setFlag(Control flag, bool value);
-        void setFlag(Mask flag, bool value);
-        void setFlag(Status flag, bool value);
-        uint8_t getFlag(Control flag) const;
-        uint8_t getFlag(Mask flag) const;
-        uint8_t getFlag(Status flag) const;
 
         void createWindow(const char *title, int width, int height);
         void destroyWindow() noexcept;

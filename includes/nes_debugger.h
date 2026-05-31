@@ -1,8 +1,7 @@
 #ifndef NES_DEBUGGER_H
 #define NES_DEBUGGER_H
 
-#include "nes_cpu.h"
-#include "nes_ppu.h"
+#include "nes.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_sdl3.h"
 #include "imgui/imgui_impl_sdlrenderer3.h"
@@ -12,7 +11,7 @@ namespace NES
     class Debugger
     {
     public:
-        Debugger(CPU &cpu, PPU &ppu, Bus &bus);
+        Debugger(Emulator &emulator);
         ~Debugger() noexcept;
 
         Debugger(const Debugger &) = delete;

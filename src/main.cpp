@@ -1,26 +1,23 @@
-#include "nes_cpu.h"
-#include "nes_ppu.h"
+#include "nes.h"
 #include "nes_debugger.h"
+#include "imgui/imgui_impl_sdl3.h"
 
 int main()
 {
-    NES::Bus bus;
-    NES::CPU cpu(bus);
-    NES::PPU ppu("NES Emulator", 768, 480);
-    NES::Debugger debugger(cpu, ppu, bus);
+    NES::Emulator nes("NES Emulator", 768, 480);
+    NES::Debugger debugger(nes);
 
-    // Load a tiny test program
-    bus.loadProgram(0x0000, {0xA9, 0x42, 0xE8, 0x4C, 0x02, 0x00}); // LDA #$42, INX, JMP $0002
-    cpu.reset();
-    cpu.setPC(0x0000);
+    nes.getBus().loadProgram(0x0000, {0xA9, 0x42, 0xE8, 0x4C, 0x02, 0x00});
+    nes.reset();
+    nes.getCPU().setPC(0x0000);
 
-    while (ppu.isRunning())
+    while (nes.isRunning())
     {
-        ppu.handleEvents([&](SDL_Event &event)
-                         { ImGui_ImplSDL3_ProcessEvent(&event); });
-        ppu.clear();
-        debugger.render();
-        ppu.present();
+        nes.getPPU().handleEvents([&](SDL_Event &event)
+                                  { ImGui_ImplSDL3_ProcessEvent(&event); });
+
+        nes.tick([&]()
+                 { debugger.render(); });
     }
 
     return 0;
