@@ -40,7 +40,6 @@ namespace NES
             V = 7,  // NMI enable
         };
 
-    public:
         PPU(const char *title, int width, int height);
         ~PPU() noexcept;
 
@@ -141,6 +140,11 @@ namespace NES
         uint8_t getFlag(Mask flag) const;
         uint8_t getFlag(Status flag) const;
 
+        uint8_t cpuPeek(uint16_t address) const;
+
+        bool nmiRequested() const;
+        void clearNMI();
+
     private:
         uint8_t _tableName[2][1024]; // 2KB of name tables
         uint8_t _tablePalette[32];
@@ -156,6 +160,8 @@ namespace NES
         SDL_Renderer *_renderer{nullptr};
         bool _running{true};
 
+        SDL_Texture* _screenTexture{nullptr};
+        SDL_Color _screenBuffer[256 * 240]; // NES resolution is 256x240
         SDL_Color _clearColor{0, 0, 0, 255};
 
         uint8_t _control{0};
@@ -164,7 +170,44 @@ namespace NES
 
         uint8_t _addressLatch{0};
         uint8_t _ppuDataBuffer{0};
-        uint16_t _vramAddress{0};
+
+        // Shout out my homie Loopy (and javidx9)!
+        union LoopyRegister
+        {
+            struct
+            {
+                uint16_t coarseX : 5;    // bits 0-4
+                uint16_t coarseY : 5;    // bits 5-9
+                uint16_t nametableX : 1; // bit 10
+                uint16_t nametableY : 1; // bit 11
+                uint16_t fineY : 3;      // bits 12-14
+                uint16_t unused : 1;     // bit 15
+            };
+            uint16_t reg{0};
+        };
+        LoopyRegister _vramAddress{0};
+        LoopyRegister _tramAddress{0};
+        uint8_t _fineX{0};
+
+        uint8_t _backgroundNextTileID{0};
+        uint8_t _backgroundNextTileAttrib{0};
+        uint8_t _backgroundNextTileLSB{0};
+        uint8_t _backgroundNextTileMSB{0};
+
+        uint16_t backgroundShifterPatternLo{0};
+        uint16_t backgroundShifterPatternHi{0};
+        uint16_t backgroundShifterAttribLo{0};
+        uint16_t backgroundShifterAttribHi{0};
+
+        bool _nmiRequest{false};
+
+        void incrementScrollX();
+        void incrementScrollY();
+        void transferAddressX();
+        void transferAddressY();
+
+        void loadBackgroundShifters();
+        void updateShifters();
 
         void createWindow(const char *title, int width, int height);
         void destroyWindow() noexcept;

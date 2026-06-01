@@ -15,22 +15,32 @@ uint8_t Bus::read(uint16_t address)
     // $2000-$3FFF : PPU registers, mirrored every 8 bytes
     else if (address >= 0x2000 && address < 0x4000)
     {
-        throw NotImplemented("TODO: NES PPU Registers and mirrors of $2000-$2007", __func__);
+        if (_ppu)
+        {
+            data = _ppu->cpuRead(address & 0x0007);
+        }
     }
     // $4000-$4017 : APU and I/O registers
     else if (address >= 0x4000 && address < 0x4018)
     {
-        throw NotImplemented("TODO: NES APU and I/O registers", __func__);
+        // TODO: Implement APU and I/O registers
+        // throw NotImplemented("TODO: NES APU and I/O registers", __func__);
     }
     // $4018-$401F : APU and I/O functionality that is normally disabled
     else if (address >= 0x4018 && address < 0x4020)
     {
-        throw NotImplemented("TODO: See CPU Test Mode on nesdev.org", __func__);
+        // TODO: Implement APU and I/O functionality that is normally disabled
+        // throw NotImplemented("TODO: See CPU Test Mode on nesdev.org", __func__);
     }
     // $4020-$FFFF : cartridge use
     else
     {
-        throw NotImplemented("TODO: Unmapped, available for cartridge use, cartridge RAM, cartridge ROM and mapper registers");
+        if (_cartridge)
+        {
+            auto cartridgeData = _cartridge->cpuRead(address);
+            if (cartridgeData)
+                data = *cartridgeData;
+        }
     }
 
     _openBus = data;
@@ -47,22 +57,30 @@ void Bus::write(uint16_t address, uint8_t value)
     // $2000-$3FFF : PPU registers, mirrored every 8 bytes
     else if (address >= 0x2000 && address < 0x4000)
     {
-        throw NotImplemented("TODO: NES PPU Registers and mirrors of $2000-$2007", __func__);
+        if (_ppu)
+        {
+             _ppu->cpuWrite(address & 0x0007, value);
+        }  
     }
     // $4000-$4017 : APU and I/O registers
     else if (address >= 0x4000 && address < 0x4018)
     {
-        throw NotImplemented("TODO: NES APU and I/O registers", __func__);
+        // TODO: Implement APU and I/O registers
+        //throw NotImplemented("TODO: NES APU and I/O registers", __func__);
     }
     // $4018-$401F : APU and I/O functionality that is normally disabled
     else if (address >= 0x4018 && address < 0x4020)
     {
-        throw NotImplemented("TODO: See CPU Test Mode on nesdev.org", __func__);
+        // TODO: Implement APU and I/O functionality that is normally disabled
+        // throw NotImplemented("TODO: See CPU Test Mode on nesdev.org", __func__);
     }
     // $4020-$FFFF : cartridge use
     else
     {
-        throw NotImplemented("TODO: Unmapped, available for cartridge use, cartridge RAM, cartridge ROM and mapper registers");
+        if (_cartridge)
+        {
+            _cartridge->cpuWrite(address, value);
+        }
     }
 }
 
@@ -77,16 +95,34 @@ void Bus::loadProgram(uint16_t address, std::vector<uint8_t> const& bytes)
 uint8_t Bus::peek(uint16_t address) const
 {
     if (address < 0x2000)
+    {
         return _ram.read(address & 0x07FF);
+    }
+
+    if (address >= 0x2000 && address < 0x4000)
+    {
+        if (_ppu)
+            return _ppu->cpuPeek(address & 0x0007);
+    }
+
     if (address >= 0x8000) // cartridge ROM
     {
-        auto data = _cartridge->cpuRead(address);
-        if (data) return *data;
+        if (_cartridge)
+        {
+            auto data = _cartridge->cpuRead(address);
+            if (data) return *data;
+        }
     }
+    
     return 0; 
 }
 
 void Bus::insertCartridge(std::shared_ptr<Cartridge> cartridge)
 {
     _cartridge = cartridge;
+}
+
+void Bus::connectPPU(PPU* ppu)
+{
+    _ppu = ppu;
 }

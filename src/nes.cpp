@@ -5,6 +5,7 @@ using namespace NES;
 Emulator::Emulator(const char *title, int width, int height)
     : _ppu(title, width, height)
 {
+    _bus.connectPPU(&_ppu);
 }
 
 Bus &Emulator::getBus()
@@ -38,25 +39,22 @@ void Emulator::tick(std::function<void()> callback)
     uint64_t now = SDL_GetTicks();
     double elapsed = (now - _lastTime) / 1000.0; // Convert milliseconds to seconds
     _lastTime = now;
-    _accumulator += elapsed * _cpu.getClockFrequency();
+    _accumulator += elapsed * (_cpu.getClockFrequency() * 3.0);
 
     while (_accumulator >= 1.0)
     {
         _ppu.clock();
+
         if (_clockCounter % 3 == 0)
             _cpu.clock();
-        if (_ppu.getFlag(PPU::Status::V) && _ppu.getFlag(PPU::Control::V))
-        {
-            _ppu.setFlag(PPU::Status::V, false);
-            _cpu.NMI();
-        }
+
         _clockCounter++;
         _accumulator -= 1.0;
     }
 
     _ppu.clear();
     if (callback)
-        callback(); 
+        callback();
     _ppu.present();
 }
 

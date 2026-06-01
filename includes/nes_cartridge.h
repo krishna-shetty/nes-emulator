@@ -25,6 +25,17 @@ namespace NES
         std::optional<uint8_t> ppuRead(uint16_t address) const;
         void ppuWrite(uint16_t address, uint8_t value);
 
+        enum class Mirroring
+        {
+            HORIZONTAL,
+            VERTICAL,
+            ONESCREEN_LOWER,
+            ONESCREEN_UPPER,
+            FOURSCREEN
+        };
+
+        Mirroring getMirroring() const;
+
     private:
         std::vector<uint8_t> _prgROM;
         std::vector<uint8_t> _chrROM;
@@ -33,6 +44,8 @@ namespace NES
         uint8_t _mapperID{0};
         uint8_t _numPRGBanks{0};
         uint8_t _numCHRBanks{0};
+
+        Mirroring _mirroring{Mirroring::HORIZONTAL};
 
         struct Header
         {

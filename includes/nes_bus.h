@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstdint>
 #include "nes_cartridge.h"
+#include "nes_ppu.h"
 
 namespace NES
 {
@@ -25,9 +26,13 @@ namespace NES
         void insertCartridge(std::shared_ptr<Cartridge> cartridge);
         uint8_t peek(uint16_t address) const;
 
+        void connectPPU(PPU* ppu);
+
     private:
         RAM _ram;
         uint8_t _openBus{0};
+
+        PPU* _ppu{nullptr};
 
         std::shared_ptr<Cartridge> _cartridge{nullptr};
     };

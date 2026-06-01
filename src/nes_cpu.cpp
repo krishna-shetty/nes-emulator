@@ -1,8 +1,10 @@
 #include "nes_cpu.h"
+#include "iostream"
+#include <stdexcept>
 
 using namespace NES;
 
-CPU::CPU(Bus& bus, Region region) : _bus(bus)
+CPU::CPU(Bus &bus, Region region) : _bus(bus)
 {
     CLOCK_FREQUENCY = getClockFrequencyForRegion(region);
 }
@@ -20,8 +22,9 @@ void CPU::reset()
     _status = 0x24; // IRQ disabled, unused flag set
     _cycles = 0;
 
-    // Setting the program counter to 0x0000 is for testing purposes only. In a real NES, the reset vector is at 0xFFFC.
-    _pc = 0x0000;
+    uint8_t lo = _bus.read(0xFFFC);
+    uint8_t hi = _bus.read(0xFFFD);
+    _pc = (static_cast<uint16_t>(hi) << 8) | lo;
 }
 
 void CPU::clock()
@@ -96,11 +99,18 @@ uint8_t CPU::pull()
 
 void CPU::branch(int8_t offset, bool condition)
 {
-    if (condition)
-    {
-        incrementCycles();
-        _pc += offset;
-    }
+    if (!condition)
+        return;
+
+    incrementCycles(); // +1 if branch taken
+
+    uint16_t oldPC = _pc;
+    uint16_t newPC = _pc + offset;
+
+    if ((oldPC & 0xFF00) != (newPC & 0xFF00))
+        incrementCycles(); // +1 if page crossed
+
+    _pc = newPC;
 }
 
 // ============================================================
@@ -336,7 +346,7 @@ void CPU::JMP(uint16_t memory)
 // Jump to Subroutine
 void CPU::JSR(uint16_t memory)
 {
-    uint16_t returnAddr = _pc + 1;
+    uint16_t returnAddr = _pc - 1;
 
     push((returnAddr >> 8) & 0xFF);
     push(returnAddr & 0xFF);
@@ -414,7 +424,7 @@ void CPU::PLP()
 {
     _status = pull();
     clearBit(_status, static_cast<uint8_t>(Flags::B));
-    clearBit(_status, static_cast<uint8_t>(Flags::U));
+    setBit(_status, static_cast<uint8_t>(Flags::U));
 }
 
 // Rotate Right
@@ -454,7 +464,7 @@ void CPU::RTI()
 {
     _status = pull();
     clearBit(_status, static_cast<uint8_t>(Flags::B)); // B flag is not restored
-    clearBit(_status, static_cast<uint8_t>(Flags::U)); // U flag is not restored
+    setBit(_status, static_cast<uint8_t>(Flags::U));   // U flag is not restored
 
     uint8_t lo = pull();
     uint8_t hi = pull();
@@ -554,8 +564,7 @@ void CPU::TYA()
     setAccumulator(_Y);
 }
 
-
-// Non-Maskable Interrupt (NMI) 
+// Non-Maskable Interrupt (NMI)
 void CPU::NMI()
 {
     push((_pc >> 8) & 0xFF);
@@ -644,7 +653,7 @@ uint16_t CPU::addrIndirectX()
     uint8_t ptr = zp + _X;
 
     uint8_t lo = _bus.read(ptr);
-    uint8_t hi = _bus.read(ptr + 1);
+    uint8_t hi = _bus.read(static_cast<uint8_t>(ptr + 1));
     return (static_cast<uint16_t>(hi) << 8) | lo;
 }
 
@@ -653,7 +662,7 @@ uint16_t CPU::addrIndirectY()
     uint8_t zp = _bus.read(_pc++);
 
     uint8_t lo = _bus.read(zp);
-    uint8_t hi = _bus.read(zp + 1);
+    uint8_t hi = _bus.read(static_cast<uint8_t>(zp + 1));
     uint16_t base = (static_cast<uint16_t>(hi) << 8) | lo;
     uint16_t addr = base + _Y;
 
@@ -846,17 +855,14 @@ void CPU::decodeAndExecute(uint8_t opcode)
     case 0x90:
     {
         BCC(addrRelative());
-        incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
+        incrementCycles(2);
         break;
     }
 
     // Branch if Carry Set
     case 0xB0:
     {
-        uint16_t prevPc = _pc + 1; // store for page boundary check
         BCS(addrRelative());
-        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
-            incrementCycles();
         incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
         break;
     }
@@ -864,10 +870,7 @@ void CPU::decodeAndExecute(uint8_t opcode)
     // Branch if Equal
     case 0xF0:
     {
-        uint16_t prevPc = _pc + 1; // store for page boundary check
         BEQ(addrRelative());
-        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
-            incrementCycles();
         incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
         break;
     }
@@ -889,10 +892,7 @@ void CPU::decodeAndExecute(uint8_t opcode)
     // Branch if Minus
     case 0x30:
     {
-        uint16_t prevPc = _pc + 1; // store for page boundary check
         BMI(addrRelative());
-        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
-            incrementCycles();
         incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
         break;
     }
@@ -900,10 +900,7 @@ void CPU::decodeAndExecute(uint8_t opcode)
     // Branch if Not Equal
     case 0xD0:
     {
-        uint16_t prevPc = _pc + 1; // store for page boundary check
         BNE(addrRelative());
-        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
-            incrementCycles();
         incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
         break;
     }
@@ -911,10 +908,7 @@ void CPU::decodeAndExecute(uint8_t opcode)
     // Branch if Plus
     case 0x10:
     {
-        uint16_t prevPc = _pc + 1; // store for page boundary check
         BPL(addrRelative());
-        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
-            incrementCycles();
         incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
         break;
     }
@@ -930,10 +924,7 @@ void CPU::decodeAndExecute(uint8_t opcode)
     // Branch if Overflow Clear
     case 0x50:
     {
-        uint16_t prevPc = _pc + 1; // store for page boundary check
         BVC(addrRelative());
-        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
-            incrementCycles();
         incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
         break;
     }
@@ -941,10 +932,7 @@ void CPU::decodeAndExecute(uint8_t opcode)
     // Branch if Overflow Set
     case 0x70:
     {
-        uint16_t prevPc = _pc + 1; // store for page boundary check
         BVS(addrRelative());
-        if ((prevPc & 0xFF00) != (_pc & 0xFF00)) // page boundary crossed
-            incrementCycles();
         incrementCycles(2); // +1 if branch taken, +2 if page boundary crossed
         break;
     }
@@ -1487,6 +1475,14 @@ void CPU::decodeAndExecute(uint8_t opcode)
         break;
     }
 
+    // Pull A
+    case 0x68:
+    {
+        PLA();
+        incrementCycles(4);
+        break;
+    }
+
     // Pull Processor Status
     case 0x28:
     {
@@ -1548,6 +1544,43 @@ void CPU::decodeAndExecute(uint8_t opcode)
         uint8_t result = ROR(value);
         _A = result;
         incrementCycles(2);
+        break;
+    }
+
+    case 0x66:
+    {
+        uint16_t addr = addrZeroPage();
+        uint8_t value = _bus.read(addr);
+        uint8_t result = ROR(value);
+        _bus.write(addr, result);
+        incrementCycles(5);
+        break;
+    }
+    case 0x76:
+    {
+        uint16_t addr = addrZeroPageX();
+        uint8_t value = _bus.read(addr);
+        uint8_t result = ROR(value);
+        _bus.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+    case 0x6E:
+    {
+        uint16_t addr = addrAbsolute();
+        uint8_t value = _bus.read(addr);
+        uint8_t result = ROR(value);
+        _bus.write(addr, result);
+        incrementCycles(6);
+        break;
+    }
+    case 0x7E:
+    {
+        uint16_t addr = addrAbsoluteX(true);
+        uint8_t value = _bus.read(addr);
+        uint8_t result = ROR(value);
+        _bus.write(addr, result);
+        incrementCycles(7);
         break;
     }
 
@@ -1771,6 +1804,16 @@ void CPU::decodeAndExecute(uint8_t opcode)
         TYA();
         incrementCycles(2);
         break;
+    }
+
+    default:
+    {
+        std::cerr << "Unknown opcode 0x"
+                  << std::hex << static_cast<int>(opcode)
+                  << " at PC 0x"
+                  << static_cast<int>(_pc - 1)
+                  << std::endl;
+        throw std::runtime_error("Unknown opcode");
     }
     }
 }
