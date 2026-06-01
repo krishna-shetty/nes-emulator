@@ -6,6 +6,7 @@
 #include <cstdint>
 #include "nes_cartridge.h"
 #include "nes_ppu.h"
+#include "nes_controller.h"
 
 namespace NES
 {
@@ -28,11 +29,16 @@ namespace NES
 
         void connectPPU(PPU* ppu);
 
+        Controller& getController1();
+        Controller& getController2();
     private:
         RAM _ram;
         uint8_t _openBus{0};
 
         PPU* _ppu{nullptr};
+        
+        Controller _controller1;
+        Controller _controller2;
 
         std::shared_ptr<Cartridge> _cartridge{nullptr};
     };

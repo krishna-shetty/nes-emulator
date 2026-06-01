@@ -1,4 +1,5 @@
 #include "nes.h"
+#include "nes_controller.h"
 
 using namespace NES;
 
@@ -62,4 +63,17 @@ void Emulator::reset()
 {
     _cpu.reset();
     _clockCounter = 0;
+}
+
+void Emulator::handleEvents(std::function<void(SDL_Event&)> eventHandler)
+{
+    _ppu.handleEvents([&](SDL_Event& event) {
+        if (eventHandler)
+        {
+            eventHandler(event);
+        }
+            
+        _bus.getController1().handleEvent(event);
+        _bus.getController2().handleEvent(event);
+    });
 }

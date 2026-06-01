@@ -19,8 +19,8 @@ int main()
 
         while (nes.isRunning())
         {
-            nes.getPPU().handleEvents(
-                [&](SDL_Event &event)
+            nes.handleEvents(
+                [&](SDL_Event& event)
                 {
                     ImGui_ImplSDL3_ProcessEvent(&event);
                 });

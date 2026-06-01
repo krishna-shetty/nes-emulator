@@ -6,6 +6,7 @@
 #include "nes_ppu.h"
 #include "nes_cartridge.h"
 #include <memory>
+
 namespace NES
 {
     class Emulator  
@@ -20,6 +21,8 @@ namespace NES
         CPU& getCPU();
         PPU& getPPU();
         bool isRunning() const;
+
+        void handleEvents(std::function<void(SDL_Event&)> eventHandler);
     private:
         Bus _bus;
         CPU _cpu{_bus};

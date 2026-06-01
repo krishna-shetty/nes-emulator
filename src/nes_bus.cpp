@@ -30,7 +30,14 @@ uint8_t Bus::read(uint16_t address)
     else if (address >= 0x4018 && address < 0x4020)
     {
         // TODO: Implement APU and I/O functionality that is normally disabled
-        // throw NotImplemented("TODO: See CPU Test Mode on nesdev.org", __func__);
+        if (address == 0x4016)
+        {
+            data = _controller1.read();
+        }
+        else if (address == 0x4017)
+        {
+            data = _controller2.read();
+        }
     }
     // $4020-$FFFF : cartridge use
     else
@@ -66,7 +73,11 @@ void Bus::write(uint16_t address, uint8_t value)
     else if (address >= 0x4000 && address < 0x4018)
     {
         // TODO: Implement APU and I/O registers
-        //throw NotImplemented("TODO: NES APU and I/O registers", __func__);
+        if (address == 0x4016)
+        {
+            _controller1.strobe(value);
+            _controller2.strobe(value);
+        }
     }
     // $4018-$401F : APU and I/O functionality that is normally disabled
     else if (address >= 0x4018 && address < 0x4020)
@@ -125,4 +136,14 @@ void Bus::insertCartridge(std::shared_ptr<Cartridge> cartridge)
 void Bus::connectPPU(PPU* ppu)
 {
     _ppu = ppu;
+}
+
+Controller& Bus::getController1()
+{
+    return _controller1;
+}
+
+Controller& Bus::getController2()
+{
+    return _controller2;
 }
