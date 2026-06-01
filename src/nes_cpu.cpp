@@ -1,5 +1,4 @@
 #include "nes_cpu.h"
-#include "iostream"
 #include <stdexcept>
 
 using namespace NES;
@@ -1808,11 +1807,6 @@ void CPU::decodeAndExecute(uint8_t opcode)
 
     default:
     {
-        std::cerr << "Unknown opcode 0x"
-                  << std::hex << static_cast<int>(opcode)
-                  << " at PC 0x"
-                  << static_cast<int>(_pc - 1)
-                  << std::endl;
         throw std::runtime_error("Unknown opcode");
     }
     }
