@@ -124,4 +124,8 @@ Temporary Items
 .history
 .ionide
 
+## NES ROMs
+*.nes
+*.NES
+
 # End of https://www.toptal.com/developers/gitignore/api/macos,visualstudiocode,c,c++
