@@ -43,15 +43,21 @@ void Emulator::tick(std::function<void()> callback)
     _accumulator += elapsed * (_cpu.getClockFrequency() * 3.0);
 
     while (_accumulator >= 1.0)
+{
+    _ppu.clock();
+
+    if (_clockCounter % 3 == 0)
+        _cpu.clock();
+
+    if (_ppu.nmiRequested())
     {
-        _ppu.clock();
-
-        if (_clockCounter % 3 == 0)
-            _cpu.clock();
-
-        _clockCounter++;
-        _accumulator -= 1.0;
+        _cpu.NMI();
+        _ppu.clearNMI();
     }
+
+    _clockCounter++;
+    _accumulator -= 1.0;
+}
 
     _ppu.clear();
     if (callback)

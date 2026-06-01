@@ -1,6 +1,7 @@
 #include "nes_cartridge.h"
 #include <fstream>
 #include <stdexcept>
+#include <iostream>
 
 using namespace NES;
 
@@ -29,33 +30,49 @@ Cartridge::Cartridge(const std::string &filename)
         }
 
         // Determine mapper ID
-        _mapperID = (_header.flags7 >> 4) << 4 | (_header.flags6 >> 4); // after validating header
+        _mapperID = (_header.flags6 >> 4) | (_header.flags7 & 0xF0); // after validating header
         if (_header.flags6 & 0x08)
             _mirroring = Mirroring::FOURSCREEN;
         else if (_header.flags6 & 0x01)
             _mirroring = Mirroring::VERTICAL;
         else
             _mirroring = Mirroring::HORIZONTAL;
+
+        std::cout << "Signature: "
+                  << _header.signature[0]
+                  << _header.signature[1]
+                  << _header.signature[2]
+                  << " 0x" << std::hex << (int)_header.signature[3] << "\n";
+
+        std::cout << "flags6: 0x" << std::hex << (int)_header.flags6 << "\n";
+        std::cout << "flags7: 0x" << std::hex << (int)_header.flags7 << "\n";
+        std::cout << "mapper: " << std::dec << (int)_mapperID << "\n";
+        std::cout << "PRG banks: " << (int)_header.prgROMSize << "\n";
+        std::cout << "CHR banks: " << (int)_header.chrROMSize << "\n";
+
         const uint8_t fileFormatVersion = getFileFormatVersion();
 
-        // Currently, we only support the standard iNES format (version 1)
-        if (fileFormatVersion == 1)
+        // Currently, we only support the standard iNES format (version 1) and NES 2.0 (version 2). 
+        // The archaic iNES format (version 0) is not supported.
+        if (fileFormatVersion != 1 && fileFormatVersion != 2)
         {
-            _numPRGBanks = _header.prgROMSize;
-            _numCHRBanks = _header.chrROMSize;
+            throw std::runtime_error("Unsupported iNES format");
+        }
 
-            _prgROM.resize(_numPRGBanks * 16384);
-            file.read(reinterpret_cast<char *>(_prgROM.data()), _prgROM.size());
+        _numPRGBanks = _header.prgROMSize;
+        _numCHRBanks = _header.chrROMSize;
 
-            if (_numCHRBanks == 0)
-            {
-                _chrROM.resize(8192); // CHR RAM
-            }
-            else
-            {
-                _chrROM.resize(_numCHRBanks * 8192);
-                file.read(reinterpret_cast<char *>(_chrROM.data()), _chrROM.size());
-            }
+        _prgROM.resize(_numPRGBanks * 16384);
+        file.read(reinterpret_cast<char *>(_prgROM.data()), _prgROM.size());
+
+        if (_numCHRBanks == 0)
+        {
+            _chrROM.resize(8192);
+        }
+        else
+        {
+            _chrROM.resize(_numCHRBanks * 8192);
+            file.read(reinterpret_cast<char *>(_chrROM.data()), _chrROM.size());
         }
 
         _mapper = createMapper(_mapperID, _numPRGBanks, _numCHRBanks);

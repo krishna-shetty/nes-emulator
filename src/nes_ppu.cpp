@@ -1,6 +1,7 @@
 #include "nes_ppu.h"
 #include <stdexcept>
 #include "nes_utils.h"
+#include <iostream>
 
 using namespace NES;
 
@@ -153,7 +154,7 @@ void PPU::clock()
     {
         setFlag(Status::V, true); // Set VBlank flag
 
-        if(getFlag(Control::V))
+        if (getFlag(Control::V))
         {
             _nmiRequest = true; // Trigger NMI
         }
@@ -177,7 +178,23 @@ void PPU::clock()
 
     if (_cycle >= 1 && _cycle <= 256 && _scanline >= 0 && _scanline < 240)
     {
-        SDL_Color color = PALETTE[_tablePalette[(backgroundPalette << 2) | backgroundPixel] & 0x3F];
+        uint8_t colorIndex;
+
+        if (backgroundPixel == 0)
+        {
+            // Universal background color ($3F00)
+            colorIndex = _tablePalette[0x00] & 0x3F;
+        }
+        else
+        {
+            uint8_t paletteAddr =
+                ((backgroundPalette << 2) | backgroundPixel) & 0x1F;
+
+            colorIndex = _tablePalette[paletteAddr] & 0x3F;
+        }
+
+        SDL_Color color = PALETTE[colorIndex];
+
         _screenBuffer[_scanline * 256 + (_cycle - 1)] = color;
     }
 
@@ -312,6 +329,8 @@ void PPU::ppuWrite(uint16_t address, uint8_t value)
             address = 0x0008;
         else if (address == 0x001C)
             address = 0x000C;
+        _tablePalette[address] = value;
+
         _tablePalette[address] = value;
     }
 }
