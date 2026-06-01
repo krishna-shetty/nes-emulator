@@ -29,6 +29,7 @@ void PPU::createWindow(const char *title, int width, int height)
     SDL_SetRenderVSync(_renderer, 1);
     _screenTexture = SDL_CreateTexture(_renderer, SDL_PIXELFORMAT_RGBA8888,
                                        SDL_TEXTUREACCESS_STREAMING, 256, 240);
+    SDL_SetTextureScaleMode(_screenTexture, SDL_SCALEMODE_NEAREST);
 }
 
 void PPU::destroyWindow() noexcept

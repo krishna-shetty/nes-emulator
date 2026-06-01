@@ -11,7 +11,7 @@ int main()
 {
     try
     {
-        NES::Emulator nes("NES Emulator", 768, 480);
+        NES::Emulator nes("NES Emulator", 768, 720);
         NES::Debugger debugger(nes);
 
         auto cartridge = std::make_shared<NES::Cartridge>("roms/dk.nes");
