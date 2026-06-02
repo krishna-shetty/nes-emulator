@@ -43,25 +43,29 @@ void Emulator::tick(std::function<void()> callback)
     _accumulator += elapsed * (_cpu.getClockFrequency() * 3.0);
 
     while (_accumulator >= 1.0)
-{
-    _ppu.clock();
-
-    if (_clockCounter % 3 == 0)
-        _cpu.clock();
-
-    if (_ppu.nmiRequested())
     {
-        _cpu.NMI();
-        _ppu.clearNMI();
-    }
+        _ppu.clock();
 
-    _clockCounter++;
-    _accumulator -= 1.0;
-}
+        if (_clockCounter % 3 == 0)
+            _cpu.clock();
+
+        if (_ppu.nmiRequested())
+        {
+            _cpu.NMI();
+            _ppu.clearNMI();
+        }
+
+        _clockCounter++;
+        _accumulator -= 1.0;
+    }
+    
 
     _ppu.clear();
+    _ppu.draw();
+
     if (callback)
         callback();
+
     _ppu.present();
 }
 
@@ -71,15 +75,15 @@ void Emulator::reset()
     _clockCounter = 0;
 }
 
-void Emulator::handleEvents(std::function<void(SDL_Event&)> eventHandler)
+void Emulator::handleEvents(std::function<void(SDL_Event &)> eventHandler)
 {
-    _ppu.handleEvents([&](SDL_Event& event) {
+    _ppu.handleEvents([&](SDL_Event &event)
+                      {
         if (eventHandler)
         {
             eventHandler(event);
         }
             
         _bus.getController1().handleEvent(event);
-        _bus.getController2().handleEvent(event);
-    });
+        _bus.getController2().handleEvent(event); });
 }

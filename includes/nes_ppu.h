@@ -54,6 +54,7 @@ namespace NES
         bool isRunning() const { return _running; }
         void handleEvents(std::function<void(SDL_Event &)> callback = nullptr);
         void clear();
+        void draw();
         void present();
         void clock();
 

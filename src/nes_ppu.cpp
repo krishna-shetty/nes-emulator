@@ -69,10 +69,14 @@ void PPU::clear()
     SDL_RenderClear(_renderer);
 }
 
-void PPU::present()
+void PPU::draw()
 {
     SDL_UpdateTexture(_screenTexture, nullptr, _screenBuffer, 256 * sizeof(SDL_Color));
     SDL_RenderTexture(_renderer, _screenTexture, nullptr, nullptr);
+}
+
+void PPU::present()
+{
     SDL_RenderPresent(_renderer);
 }
 
