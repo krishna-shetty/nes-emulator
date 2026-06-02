@@ -14,7 +14,7 @@ int main()
         NES::Emulator nes("NES Emulator", 768, 720);
         NES::Debugger debugger(nes);
 
-        auto cartridge = std::make_shared<NES::Cartridge>("roms/nestest.nes");
+        auto cartridge = std::make_shared<NES::Cartridge>("roms/mario.nes");
         nes.insertCartridge(cartridge);
 
         nes.reset();

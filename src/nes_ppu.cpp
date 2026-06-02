@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include "nes_utils.h"
 #include <iostream>
+#include <algorithm>
 
 using namespace NES;
 
@@ -87,12 +88,25 @@ void PPU::setClearColor(SDL_Color color)
 
 void PPU::clock()
 {
+
     if (_scanline >= -1 && _scanline < 240)
     {
+        // ============================================================
+        // BACKGROUND RENDERING
+        // ============================================================
+
         if (_scanline == -1 && _cycle == 1)
         {
             setFlag(Status::V, false); // Clear VBlank flag
             _frameComplete = false;
+
+            setFlag(Status::S, false); // Clear Sprite 0 Hit flag
+            setFlag(Status::O, false); // Clear Sprite Overflow flags
+            for (int i = 0; i < 8; i++)
+            {
+                _spriteShifterPatternLo[i] = 0;
+                _spriteShifterPatternHi[i] = 0;
+            }
         }
         if ((_cycle >= 2 && _cycle < 258) || (_cycle >= 321 && _cycle < 338))
         {
@@ -148,6 +162,119 @@ void PPU::clock()
         {
             transferAddressY();
         }
+
+        if (_cycle == 338 || _cycle == 340)
+        {
+            _backgroundNextTileID = ppuRead(0x2000 | (_vramAddress.reg & 0x0FFF));
+        }
+
+        // ============================================================
+        // FOREGROUND RENDERING
+        // ============================================================
+
+        if (_cycle == 257 && _scanline >= 0)
+        {
+            std::fill(_spriteScanline.begin(),
+                      _spriteScanline.end(),
+                      Sprite{255, 255, 255, 255});
+            _spriteCount = 0;
+
+            uint8_t numOAMEntries = 0;
+            _spriteZeroHitPossible = false;
+            while (numOAMEntries < 64 && _spriteCount < 9)
+            {
+                int16_t diff = static_cast<int16_t>(_scanline) - static_cast<int16_t>(_OAM[numOAMEntries].y);
+                if (diff >= 0 && diff < (getFlag(Control::H) ? 16 : 8))
+                {
+                    if (_spriteCount < 8)
+                    {
+                        if (numOAMEntries == 0)
+                        {
+                            _spriteZeroHitPossible = true;
+                        }
+                        _spriteScanline[_spriteCount] = _OAM[numOAMEntries];
+                    }
+                    _spriteCount++;
+                }
+                numOAMEntries++;
+            }
+            if (_spriteCount > 8)
+            {
+                _spriteCount = 8;
+                setFlag(Status::O, true); // Set sprite overflow flag
+            }
+        }
+
+        if (_cycle == 340)
+        {
+            for (uint8_t i = 0; i < _spriteCount; i++)
+            {
+                uint16_t spritePatternAddrLo{0};
+                uint16_t spritePatternAddrHi{0};
+
+                uint8_t spritePatternBitsLo{0};
+                uint8_t spritePatternBitsHi{0};
+
+                if (!getFlag(Control::H)) // 8x8 sprites
+                {
+                    if (!getFlag(Control::H)) // 8x8 sprites
+                    {
+                        if (!(_spriteScanline[i].attributes & 0x80)) // no vertical flip
+                        {
+                            spritePatternAddrLo = (getFlag(Control::S) << 12) |
+                                                  (_spriteScanline[i].tileIndex << 4) |
+                                                  (static_cast<uint16_t>(_scanline) - _spriteScanline[i].y);
+                        }
+                        else // vertical flip
+                        {
+                            spritePatternAddrLo = (getFlag(Control::S) << 12) |
+                                                  (_spriteScanline[i].tileIndex << 4) |
+                                                  (7 - (static_cast<uint16_t>(_scanline) - _spriteScanline[i].y));
+                        }
+                    }
+                    else
+                    {
+                        // 8x16 sprites
+                        if (!(_spriteScanline[i].attributes & 0x80)) // No vertical flip
+                        {
+                            // No vertical flip
+                            if (static_cast<uint16_t>(_scanline) - _spriteScanline[i].y < 8)
+                            {
+                                spritePatternAddrLo = ((static_cast<uint16_t>(_spriteScanline[i].tileIndex) & 0x01) << 12) | ((static_cast<uint16_t>(_spriteScanline[i].tileIndex) & 0xFE) << 4) | ((static_cast<uint16_t>(_scanline) - _spriteScanline[i].y) & 0x07);
+                            }
+                            else
+                            {
+                                spritePatternAddrLo = ((static_cast<uint16_t>(_spriteScanline[i].tileIndex) & 0x01) << 12) | ((static_cast<uint16_t>((_spriteScanline[i].tileIndex) & 0xFE) + 1) << 4) | ((static_cast<uint16_t>(_scanline) - _spriteScanline[i].y) & 0x07);
+                            }
+                        }
+                        else // Vertical flip
+                        {
+                            if (static_cast<uint16_t>(_scanline) - _spriteScanline[i].y < 8)
+                            {
+                                spritePatternAddrLo = ((static_cast<uint16_t>(_spriteScanline[i].tileIndex) & 0x01) << 12) | ((static_cast<uint16_t>((_spriteScanline[i].tileIndex) & 0xFE) + 1) << 4) | (7 - (static_cast<uint16_t>(_scanline) - _spriteScanline[i].y));
+                            }
+                            else
+                            {
+                                spritePatternAddrLo = ((static_cast<uint16_t>(_spriteScanline[i].tileIndex) & 0x01) << 12) | ((static_cast<uint16_t>(_spriteScanline[i].tileIndex) & 0xFE) << 4) | (7 - ((static_cast<uint16_t>(_scanline) - _spriteScanline[i].y) & 0x07));
+                            }
+                        }
+                    }
+                }
+                spritePatternAddrHi = spritePatternAddrLo + 8;
+
+                spritePatternBitsLo = ppuRead(spritePatternAddrLo);
+                spritePatternBitsHi = ppuRead(spritePatternAddrHi);
+
+                if (_spriteScanline[i].attributes & 0x40) // Horizontal flip
+                {
+                    spritePatternBitsLo = reverseByte(spritePatternBitsLo);
+                    spritePatternBitsHi = reverseByte(spritePatternBitsHi);
+                }
+
+                _spriteShifterPatternLo[i] = spritePatternBitsLo;
+                _spriteShifterPatternHi[i] = spritePatternBitsHi;
+            }
+        }
     }
 
     if (_scanline == 240)
@@ -181,26 +308,112 @@ void PPU::clock()
         backgroundPalette = (bgPal1 << 1) | bgPal0;
     }
 
-    if (_cycle >= 1 && _cycle <= 256 && _scanline >= 0 && _scanline < 240)
-    {
-        uint8_t colorIndex;
+    uint8_t foregroundPixel = 0x00;
+    uint8_t foregroundPalette = 0x00;
+    uint8_t foregroundPriority = 0x00;
 
-        if (backgroundPixel == 0)
+    if (getFlag(Mask::s))
+    {
+        _isSpriteZeroBeingRendered = false;
+
+        for (uint8_t i = 0; i < _spriteCount; i++)
         {
-            // Universal background color ($3F00)
-            colorIndex = _tablePalette[0x00] & 0x3F;
+            if (_spriteScanline[i].x == 0)
+            {
+                uint8_t spritePixelLo = (_spriteShifterPatternLo[i] & 0x80) > 0;
+                uint8_t spritePixelHi = (_spriteShifterPatternHi[i] & 0x80) > 0;
+                foregroundPixel = (spritePixelHi << 1) | spritePixelLo;
+
+                foregroundPalette = (_spriteScanline[i].attributes & 0x03) + 0x04; // Sprite palettes start at index 4
+                foregroundPriority = (_spriteScanline[i].attributes & 0x20) == 0;  // Priority bit
+
+                if (foregroundPixel != 0)
+                {
+                    if (i == 0)
+                    {
+                        _isSpriteZeroBeingRendered = true;
+                    }
+                    break; // Found a non-transparent sprite pixel
+                }
+            }
+        }
+    }
+
+    uint8_t finalPixel = 0x00;
+    uint8_t finalPalette = 0x00;
+
+    if (backgroundPixel == 0 && foregroundPixel == 0)
+    {
+        finalPixel = 0;
+        finalPalette = 0;
+    }
+    else if (backgroundPixel == 0 && foregroundPixel != 0)
+    {
+        finalPixel = foregroundPixel;
+        finalPalette = foregroundPalette;
+    }
+    else if (backgroundPixel != 0 && foregroundPixel == 0)
+    {
+        finalPixel = backgroundPixel;
+        finalPalette = backgroundPalette;
+    }
+    else
+    {
+        if (foregroundPriority)
+        {
+            finalPixel = foregroundPixel;
+            finalPalette = foregroundPalette;
         }
         else
         {
-            uint8_t paletteAddr =
-                ((backgroundPalette << 2) | backgroundPixel) & 0x1F;
-
-            colorIndex = _tablePalette[paletteAddr] & 0x3F;
+            finalPixel = backgroundPixel;
+            finalPalette = backgroundPalette;
         }
 
-        SDL_Color color = PALETTE[colorIndex];
+        if (_spriteZeroHitPossible && _isSpriteZeroBeingRendered)
+        {
+            if (getFlag(Mask::b) && getFlag(Mask::s))
+            {
+                if (!((backgroundPixel & 0x01) == 0 && (foregroundPixel & 0x01) == 0))
+                {
+                    if (_cycle >= 9 && _cycle < 258)
+                    {
+                        setFlag(Status::S, true); // Set sprite zero hit flag
+                    }
+                }
+                else
+                {
+                    if (_cycle >= 1 && _cycle < 258)
+                    {
+                        setFlag(Status::S, true); // Set sprite zero hit flag
+                    }
+                }
+            }
+        }
+    }
 
-        _screenBuffer[_scanline * 256 + (_cycle - 1)] = color;
+    if (_cycle >= 1 && _cycle <= 256 && _scanline >= 0 && _scanline < 240)
+    {
+        if (_cycle >= 1 && _cycle <= 256 && _scanline >= 0 && _scanline < 240)
+        {
+            uint8_t colorIndex;
+
+            if (finalPixel == 0)
+            {
+                colorIndex = _tablePalette[0x00] & 0x3F;
+            }
+            else
+            {
+                uint8_t paletteAddr =
+                    ((finalPalette << 2) | finalPixel) & 0x1F;
+
+                colorIndex = _tablePalette[paletteAddr] & 0x3F;
+            }
+
+            SDL_Color color = PALETTE[colorIndex];
+
+            _screenBuffer[_scanline * 256 + (_cycle - 1)] = color;
+        }
     }
 
     _cycle++;
@@ -355,8 +568,11 @@ void PPU::cpuWrite(uint16_t address, uint8_t value)
     case 0x0002: // Status
         break;   // Read-only
     case 0x0003: // OAM Address
+        _OAMAddress = value;
         break;   // Not implemented
     case 0x0004: // OAM Data
+        _OAMPtr[_OAMAddress] = value;
+        _OAMAddress++;
         break;   // Not implemented
     case 0x0005: // Scroll
         if (_addressLatch == 0)
@@ -410,6 +626,7 @@ uint8_t PPU::cpuRead(uint16_t address)
     case 0x0003: // OAM Address
         break;   // Not implemented
     case 0x0004: // OAM Data
+        data = _OAMPtr[_OAMAddress];
         break;   // Not implemented
     case 0x0005: // Scroll
         break;   // Not implemented
@@ -563,6 +780,22 @@ void PPU::updateShifters()
         backgroundShifterAttribLo <<= 1;
         backgroundShifterAttribHi <<= 1;
     }
+
+    if (getFlag(Mask::s) && _cycle >= 1 && _cycle < 258)
+    {
+        for (uint8_t i = 0; i < _spriteCount; i++)
+        {
+            if (_spriteScanline[i].x > 0)
+            {
+                _spriteScanline[i].x--;
+            }
+            else
+            {
+                _spriteShifterPatternLo[i] <<= 1;
+                _spriteShifterPatternHi[i] <<= 1;
+            }
+        }
+    }
 }
 
 bool PPU::nmiRequested() const
@@ -573,4 +806,9 @@ bool PPU::nmiRequested() const
 void PPU::clearNMI()
 {
     _nmiRequest = false;
+}
+
+void PPU::setOAMData(uint8_t address, uint8_t value)
+{
+    _OAMPtr[address] = value;
 }

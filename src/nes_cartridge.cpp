@@ -52,9 +52,9 @@ Cartridge::Cartridge(const std::string &filename)
 
         const uint8_t fileFormatVersion = getFileFormatVersion();
 
-        // Currently, we only support the standard iNES format (version 1) and NES 2.0 (version 2). 
+        // Currently, we only support the standard iNES format (version 1)
         // The archaic iNES format (version 0) is not supported.
-        if (fileFormatVersion != 1 && fileFormatVersion != 2)
+        if (fileFormatVersion != 1)
         {
             throw std::runtime_error("Unsupported iNES format");
         }

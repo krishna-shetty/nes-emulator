@@ -2,6 +2,7 @@
 #define NES_PPU_H
 #include <SDL3/SDL.h>
 #include <functional>
+#include <array>
 #include "nes_cartridge.h"
 
 namespace NES
@@ -146,6 +147,8 @@ namespace NES
         bool nmiRequested() const;
         void clearNMI();
 
+        void setOAMData(uint8_t address, uint8_t value);
+
     private:
         uint8_t _tableName[2][1024]; // 2KB of name tables
         uint8_t _tablePalette[32];
@@ -209,6 +212,28 @@ namespace NES
 
         void loadBackgroundShifters();
         void updateShifters();
+
+        struct Sprite
+        {
+            uint8_t y; // Y position of the sprite
+            uint8_t tileIndex; // Tile index number
+            uint8_t attributes; // Attributes (palette, priority, flipping)
+            uint8_t x; // X position of the sprite
+        };
+
+        std::array<Sprite, 64> _OAM; // Object Attribute Memory for up to 64 sprites
+        uint8_t* _OAMPtr = reinterpret_cast<uint8_t*>(_OAM.data()); // Pointer for byte-wise access to OAM
+
+        uint8_t _OAMAddress{0}; // OAM address for sprite data access
+
+        std::array<Sprite, 8> _spriteScanline;
+        uint8_t _spriteCount{0};
+
+        std::array<uint8_t, 8> _spriteShifterPatternLo;
+        std::array<uint8_t, 8> _spriteShifterPatternHi;
+
+        bool _spriteZeroHitPossible{false};
+        bool _isSpriteZeroBeingRendered{false};
 
         void createWindow(const char *title, int width, int height);
         void destroyWindow() noexcept;

@@ -23,15 +23,14 @@ uint8_t Bus::read(uint16_t address)
     // $4000-$4017 : APU and I/O registers
     else if (address >= 0x4000 && address < 0x4018)
     {
-        // TODO: Implement APU and I/O registers
-       if (address == 0x4016)
+        if (address == 0x4016)
         {
             data = _controller1.read();
         }
         else if (address == 0x4017)
         {
             data = _controller2.read();
-        } 
+        }
     }
     // $4018-$401F : APU and I/O functionality that is normally disabled
     else if (address >= 0x4018 && address < 0x4020)
@@ -65,16 +64,25 @@ void Bus::write(uint16_t address, uint8_t value)
     {
         if (_ppu)
         {
-             _ppu->cpuWrite(address & 0x0007, value);
-        }  
+            _ppu->cpuWrite(address & 0x0007, value);
+        }
     }
     // $4000-$4017 : APU and I/O registers
     else if (address >= 0x4000 && address < 0x4018)
     {
         // TODO: Implement APU and I/O registers
-        if (address == 0x4016)
+        if (address == 0x4014) // OAM DMA
+        {
+            _dmaPage = value;
+            _dmaAddress = 0x00;
+            _dmaInProgress = true;
+        }
+        else if (address == 0x4016)
         {
             _controller1.strobe(value);
+        }
+        else if (address == 0x4017)
+        {
             _controller2.strobe(value);
         }
     }
@@ -94,7 +102,7 @@ void Bus::write(uint16_t address, uint8_t value)
     }
 }
 
-void Bus::loadProgram(uint16_t address, std::vector<uint8_t> const& bytes)
+void Bus::loadProgram(uint16_t address, std::vector<uint8_t> const &bytes)
 {
     for (size_t i = 0; i < bytes.size(); i++)
     {
@@ -120,11 +128,12 @@ uint8_t Bus::peek(uint16_t address) const
         if (_cartridge)
         {
             auto data = _cartridge->cpuRead(address);
-            if (data) return *data;
+            if (data)
+                return *data;
         }
     }
-    
-    return 0; 
+
+    return 0;
 }
 
 void Bus::insertCartridge(std::shared_ptr<Cartridge> cartridge)
@@ -132,17 +141,62 @@ void Bus::insertCartridge(std::shared_ptr<Cartridge> cartridge)
     _cartridge = cartridge;
 }
 
-void Bus::connectPPU(PPU* ppu)
+void Bus::connectPPU(PPU *ppu)
 {
     _ppu = ppu;
 }
 
-Controller& Bus::getController1()
+Controller &Bus::getController1()
 {
     return _controller1;
 }
 
-Controller& Bus::getController2()
+Controller &Bus::getController2()
 {
     return _controller2;
+}
+
+bool Bus::getDMAInProgress() const
+{
+    return _dmaInProgress;
+}
+
+bool Bus::getDMADummyCycle() const
+{
+    return _dmaDummyCycle;
+}
+
+void Bus::setDMAInProgress(bool inProgress)
+{
+    _dmaInProgress = inProgress;
+}
+
+void Bus::setDMADummyCycle(bool dummyCycle)
+{
+    _dmaDummyCycle = dummyCycle;
+}
+
+void Bus::setDMAData(uint8_t data)
+{
+    _dmaData = data;
+}
+
+void Bus::incrementDMAAddress(uint8_t increment)
+{
+    _dmaAddress += increment;
+}
+
+uint8_t Bus::getDMAAddress() const
+{
+    return _dmaAddress;
+}
+
+uint8_t Bus::getDMAData() const
+{
+    return _dmaData;
+}
+
+uint8_t Bus::getDMAPage() const
+{
+    return _dmaPage;
 }

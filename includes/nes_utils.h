@@ -32,5 +32,14 @@ namespace NES
         value &= 1;
         return value;
     }
+
+    // https://stackoverflow.com/a/2602885
+    inline uint8_t reverseByte(uint8_t byte)
+    {
+        byte = (byte & 0xF0) >> 4 | (byte & 0x0F) << 4;
+        byte = (byte & 0xCC) >> 2 | (byte & 0x33) << 2;
+        byte = (byte & 0xAA) >> 1 | (byte & 0x55) << 1;
+        return byte;
+    }
 } // namespace NES
 #endif // NES_UTILS_H

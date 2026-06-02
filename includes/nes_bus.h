@@ -31,6 +31,16 @@ namespace NES
 
         Controller& getController1();
         Controller& getController2();
+
+        bool getDMAInProgress() const;
+        bool getDMADummyCycle() const;
+        void setDMAInProgress(bool inProgress);
+        void setDMADummyCycle(bool dummyCycle);
+        void setDMAData(uint8_t data);
+        uint8_t getDMAAddress() const;
+        uint8_t getDMAData() const;
+        uint8_t getDMAPage() const;
+        void incrementDMAAddress(uint8_t increment = 1);
     private:
         RAM _ram;
         uint8_t _openBus{0};
@@ -39,6 +49,13 @@ namespace NES
         
         Controller _controller1;
         Controller _controller2;
+
+        uint8_t _dmaPage{0};
+        uint8_t _dmaAddress{0};
+        uint8_t _dmaData{0};
+
+        bool _dmaInProgress{false};
+        bool _dmaDummyCycle{true};
 
         std::shared_ptr<Cartridge> _cartridge{nullptr};
     };

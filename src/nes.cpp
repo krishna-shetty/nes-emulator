@@ -47,7 +47,44 @@ void Emulator::tick(std::function<void()> callback)
         _ppu.clock();
 
         if (_clockCounter % 3 == 0)
-            _cpu.clock();
+        {
+            if (_bus.getDMAInProgress())
+            {
+                if (_bus.getDMADummyCycle())
+                {
+                    if (_clockCounter % 2 == 1)
+                    {
+                        _bus.setDMADummyCycle(false);
+                    }
+                }
+                else
+                {
+                    if (_clockCounter % 2 == 0)
+                    {
+                        uint16_t addr =
+                            (static_cast<uint16_t>(_bus.getDMAPage()) << 8) |
+                            _bus.getDMAAddress();
+
+                        _bus.setDMAData(_bus.read(addr));
+                    }
+                    else
+                    {
+                        _ppu.setOAMData(_bus.getDMAAddress(), _bus.getDMAData());
+                        _bus.incrementDMAAddress();
+
+                        if (_bus.getDMAAddress() == 0x00)
+                        {
+                            _bus.setDMAInProgress(false);
+                            _bus.setDMADummyCycle(true);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                _cpu.clock();
+            }
+        }
 
         if (_ppu.nmiRequested())
         {
@@ -58,7 +95,6 @@ void Emulator::tick(std::function<void()> callback)
         _clockCounter++;
         _accumulator -= 1.0;
     }
-    
 
     _ppu.clear();
     _ppu.draw();
