@@ -11,10 +11,11 @@ void Controller::strobe(uint8_t value)
 uint8_t Controller::read()
 {
     if (_strobe)
-        return _state & 0x01; // if strobe is high, always return the state of the A button
+        return _state & 0x01;
 
-    uint8_t bit = (_shifter & 0x80) ? 1 : 0;
-    _shifter <<= 1;
+    uint8_t bit = _shifter & 0x01;
+    _shifter >>= 1;
+
     return bit;
 }
 
