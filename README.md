@@ -1,34 +1,45 @@
 # NES Emulator
 
-... or the makings of one, at least.
+... emulates a NES like it's a NES, minus the audio and most of the library (hee hee).
 
-## What's Here
+## Features
 
 - **Cycle-accurate 6502 CPU** with all official opcodes and addressing modes
-- **Per-opcode GoogleTest suite:** Assertions on register state, flags, and cycle counts
-- **ImGui debugger:** Register inspection, status flags, disassembly view, and single-step execution
-- **SDL3 windowing** via a stub PPU
+- **PPU implementation** with background rendering, sprite rendering, scrolling, DMA, and NMI support
+- **Mapper 000 (NROM)** cartridge support
+- **Controller input** ($4016/$4017)
+- **ImGui debugger** with register inspection, status flags, memory view, and single-step execution
+- **Integrated disassembler**
+- **GoogleTest CPU test suite** with per-opcode validation
 
-## What's Amiss
+## Roadmap
 
-- PPU (graphics): the window initializes but no rendering beyond the debugger overlay
 - APU (audio)
-- Cartridge/mapper support
+- Additional mapper support
+- Accuracy improvements and hardware edge cases
+
+## Tested Games
+
+- nestest
+- Donkey Kong
+- Super Mario Bros.
 
 ## Dependencies
 
 - [SDL3](https://github.com/libsdl-org/SDL)
-- [GoogleTest](https://github.com/google/googletest): for running CPU tests only
-- ImGui: included in source
+- [GoogleTest](https://github.com/google/googletest) (tests only)
+- ImGui (included in source)
 
 Install on macOS:
+
 ```bash
 brew install sdl3 googletest
 ```
 
 ## Build
 
-**Emulator:**
+### Emulator
+
 ```bash
 mkdir -p build && clang++ -std=c++17 -Wall -Wextra -g \
   $(find src -name '*.cpp') \
@@ -36,10 +47,12 @@ mkdir -p build && clang++ -std=c++17 -Wall -Wextra -g \
   $(pkg-config --cflags sdl3) \
   $(pkg-config --libs sdl3) \
   -o build/nes
+
 ./build/nes
 ```
 
-**Tests:**
+### Tests
+
 ```bash
 mkdir -p build && clang++ -std=c++17 -g \
   src/nes_ram.cpp src/nes_cpu.cpp \
@@ -49,9 +62,12 @@ mkdir -p build && clang++ -std=c++17 -g \
   -L/opt/homebrew/lib \
   -lgtest -lgtest_main \
   -o build/nes_test
+
 ./build/nes_test
 ```
 
 ## Notes
 
-No CMake! Build instructions are explicit by design. If you're on a different platform, the clang commands translate directly to your toolchain of choice.
+No CMake. Build instructions are explicit by design.
+
+The emulator currently targets NROM cartridges and is being developed with an emphasis on correctness and understanding of NES hardware internals.
