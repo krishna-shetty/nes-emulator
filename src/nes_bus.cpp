@@ -24,20 +24,19 @@ uint8_t Bus::read(uint16_t address)
     else if (address >= 0x4000 && address < 0x4018)
     {
         // TODO: Implement APU and I/O registers
-        // throw NotImplemented("TODO: NES APU and I/O registers", __func__);
-    }
-    // $4018-$401F : APU and I/O functionality that is normally disabled
-    else if (address >= 0x4018 && address < 0x4020)
-    {
-        // TODO: Implement APU and I/O functionality that is normally disabled
-        if (address == 0x4016)
+       if (address == 0x4016)
         {
             data = _controller1.read();
         }
         else if (address == 0x4017)
         {
             data = _controller2.read();
-        }
+        } 
+    }
+    // $4018-$401F : APU and I/O functionality that is normally disabled
+    else if (address >= 0x4018 && address < 0x4020)
+    {
+        // TODO: Implement APU and I/O functionality that is normally disabled
     }
     // $4020-$FFFF : cartridge use
     else
