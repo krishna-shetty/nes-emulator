@@ -1,36 +1,37 @@
 #ifndef NES_H
 #define NES_H
-
-#include <cstdint>
+#include "nes_utils.h"
+#include "nes_bus.h"
+#include "nes_cpu.h"
+#include "nes_ppu.h"
+#include "nes_cartridge.h"
+#include <memory>
 
 namespace NES
 {
-    enum class Region
+    class Emulator  
     {
-        NTSC,
-        PAL
+    public:
+        Emulator(const char* title, int width, int height);
+        void insertCartridge(std::shared_ptr<Cartridge> cartridge);
+        void tick(std::function<void()> callback = nullptr);
+        void reset();
+
+        Bus& getBus();
+        CPU& getCPU();
+        PPU& getPPU();
+        bool isRunning() const;
+
+        void handleEvents(std::function<void(SDL_Event&)> eventHandler);
+    private:
+        Bus _bus;
+        CPU _cpu{_bus};
+        PPU _ppu;
+
+        uint64_t _lastTime{SDL_GetTicks()};
+        double _accumulator{0.0};
+ 
+        uint32_t _clockCounter{0};
     };
-
-    inline void setBit(uint8_t &num, uint8_t n)
-    {
-        num |= (1 << n);
-    }
-
-    inline void clearBit(uint8_t &num, uint8_t n)
-    {
-        num &= ~(1 << n);
-    }
-
-    inline void toggleBit(uint8_t &num, uint8_t n)
-    {
-        num ^= (1 << n);
-    }
-
-    inline uint8_t getBit(uint8_t num, uint8_t n)
-    {
-        uint8_t value = num >> n;
-        value &= 1;
-        return value;
-    }
 } // namespace NES
-#endif // namespace NES_H
+#endif // NES_H

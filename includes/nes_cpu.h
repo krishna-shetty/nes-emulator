@@ -1,8 +1,8 @@
 #ifndef NES_CPU_H
 #define NES_CPU_H
 
-#include "nes.h"
-#include "nes_ram.h"
+#include "nes_utils.h"
+#include "nes_bus.h"
 #include <cstdint>
 #include <vector>
 
@@ -11,7 +11,12 @@ namespace NES
     class CPU
     {
     public:
-        CPU(Region region = Region::NTSC);
+        CPU(Bus &bus, Region region = Region::NTSC);
+
+        CPU(const CPU &) = delete;
+        CPU &operator=(const CPU &) = delete;
+        CPU(CPU &&) = delete;
+        CPU &operator=(CPU &&) = delete;
 
         struct State
         {
@@ -25,13 +30,12 @@ namespace NES
         };
 
         void reset();
-        void step();
+        void clock();
         void setPC(uint16_t address);
         State getState() const;
 
-        // For tests: load bytes directly into RAM
-        void loadProgram(uint16_t address, std::vector<uint8_t> const &bytes);
-
+        void NMI();
+        uint32_t getClockFrequency() const;
     private:
         uint8_t _A;
         uint8_t _X;
@@ -39,10 +43,22 @@ namespace NES
         uint16_t _pc;
         uint8_t _sp;
         uint8_t _status;
-        uint32_t CLOCK_FREQUENCY{1790000};
-        RAM _ram;
+        uint32_t CLOCK_FREQUENCY{1'789'773}; // Default to NTSC frequency
+
+        Bus& _bus;
 
         uint64_t _cycles{0};
+
+        inline uint32_t getClockFrequencyForRegion(Region region)
+        {
+            switch (region)
+            {
+            case Region::NTSC:
+                return 1'789'773;
+            case Region::PAL:
+                return 1'662'607;
+            }
+        }
 
         enum class Flags : uint8_t
         {
@@ -139,17 +155,6 @@ namespace NES
         void TYA();
 
         void decodeAndExecute(uint8_t opcode);
-
-        inline uint32_t getClockFrequency(Region region)
-        {
-            switch (region)
-            {
-            case Region::NTSC:
-                return 1'789'773;
-            case Region::PAL:
-                return 1'662'607;
-            }
-        }
 
         inline void incrementCycles(uint8_t increment = 1)
         {

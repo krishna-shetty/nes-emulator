@@ -2,18 +2,63 @@
 #define NES_BUS_H
 
 #include "nes_ram.h"
+#include <vector>
+#include <cstdint>
+#include "nes_cartridge.h"
+#include "nes_ppu.h"
+#include "nes_controller.h"
 
 namespace NES
 {
     class Bus
     {
-        private:
-            RAM* ram{nullptr};
+    public:
+        Bus() = default;
 
-            uint8_t openBus{0};
+        Bus(const Bus &) = delete;
+        Bus &operator=(const Bus &) = delete;
+        Bus(Bus &&) = delete;
+        Bus &operator=(Bus &&) = delete;
 
-            uint8_t read(uint16_t address);
-            void write(uint16_t address, uint8_t value);
-    }; 
-} //namespace NES
+        uint8_t read(uint16_t address);
+        void write(uint16_t address, uint8_t value);
+
+        void loadProgram(uint16_t address, std::vector<uint8_t> const &bytes);
+        void insertCartridge(std::shared_ptr<Cartridge> cartridge);
+        uint8_t peek(uint16_t address) const;
+
+        void connectPPU(PPU* ppu);
+
+        Controller& getController1();
+        Controller& getController2();
+
+        bool getDMAInProgress() const;
+        bool getDMADummyCycle() const;
+        void setDMAInProgress(bool inProgress);
+        void setDMADummyCycle(bool dummyCycle);
+        void setDMAData(uint8_t data);
+        uint8_t getDMAAddress() const;
+        uint8_t getDMAData() const;
+        uint8_t getDMAPage() const;
+        void incrementDMAAddress(uint8_t increment = 1);
+    private:
+        RAM _ram;
+        uint8_t _openBus{0};
+
+        PPU* _ppu{nullptr};
+        
+        Controller _controller1;
+        Controller _controller2;
+
+        uint8_t _dmaPage{0};
+        uint8_t _dmaAddress{0};
+        uint8_t _dmaData{0};
+
+        bool _dmaInProgress{false};
+        bool _dmaDummyCycle{true};
+
+        std::shared_ptr<Cartridge> _cartridge{nullptr};
+    };
+} // namespace NES
+
 #endif // NES_BUS_H
